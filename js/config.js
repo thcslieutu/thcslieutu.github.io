@@ -15,5 +15,14 @@ window.APP_CONFIG = {
   NAM_HOC_KET_THUC: '05-31',
 
   // Người ghi được tự hủy vi phạm vừa nhập trong bao nhiêu phút (khớp với schema.sql)
-  PHUT_DUOC_HUY: 15
+  PHUT_DUOC_HUY: 15,
+
+  // Giáo viên được chọn ngày giờ vi phạm lùi về trước tối đa bao nhiêu ngày
+  // (BGH, Quản trị không giới hạn). Khớp với "so_ngay_lui" trong schema.sql
+  SO_NGAY_DUOC_LUI: 7,
+
+  // Thông tin tác giả (hiện ở chân trang trên máy tính)
+  TAC_GIA: 'Lâm Hòa Văn',
+  TAC_GIA_SDT: '0977.364.202',
+  TAC_GIA_DON_VI: 'Giáo viên Trường THCS Liêu Tú'
 };

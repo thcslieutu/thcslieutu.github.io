@@ -15,6 +15,7 @@
       <div class="logo">✓</div>
       <h1>Quản lý vi phạm học sinh</h1>
       <p class="muted center" id="ten-truong-login"></p>
+      <p class="ok-msg center hidden" id="login-ok"></p>
       <label class="dk hidden">Họ và tên<input class="input" name="ten" autocomplete="name"></label>
       <label>Email<input class="input" type="email" name="email" required autocomplete="username"></label>
       <label>Mật khẩu<input class="input" type="password" name="pw" required minlength="6" autocomplete="current-password"></label>
@@ -39,6 +40,11 @@
     </header>
     <main id="noi-dung"></main>
   </div>
+
+  <!-- Thông tin tác giả: chỉ hiện trên màn hình máy tính -->
+  <footer class="tac-gia" id="tac-gia">
+    Tác giả: <b>Lâm Hòa Văn</b> · SĐT: <a href="tel:0977364202">0977.364.202</a> · Giáo viên Trường THCS Liêu Tú
+  </footer>
 
   <div id="modal" class="modal hidden"><div class="modal-box" role="dialog" aria-modal="true"><div id="modal-body"></div></div></div>
   <div id="toast" role="status"></div>

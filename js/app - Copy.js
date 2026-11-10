@@ -335,7 +335,13 @@ async function capNhatBadge() {
 }
 
 const VIEWS = {};
+/* Mỗi lần chuyển trang, số phiên tăng lên. Dữ liệu của trang cũ tải về muộn
+   (do bấm chuyển trang nhanh) sẽ bị bỏ qua thay vì ghi vào trang mới → tránh lỗi
+   "Cannot set properties of null". */
+let phienTrang = 0;
+const giuPhien = () => { const p = phienTrang; return () => p === phienTrang; };
 function dieuHuong() {
+  phienTrang++;
   let v = location.hash.slice(1) || 'nhap';
   if (!MENU.find(m => m.id === v && m.ai())) { v = 'nhap'; history.replaceState(null, '', '#nhap'); }
   $$('#nav a').forEach(a => a.classList.toggle('active', a.dataset.v === v));
@@ -343,7 +349,8 @@ function dieuHuong() {
   const el = $('#noi-dung');
   el.onclick = el.oninput = el.onchange = el.onkeydown = el.onsubmit = null;
   window.scrollTo(0, 0);
-  Promise.resolve(VIEWS[v](el)).catch(e => { console.error(e); toast(dichLoi(e), 'err'); });
+  const conSong = giuPhien();
+  Promise.resolve(VIEWS[v](el)).catch(e => { console.error(e); if (conSong()) toast(dichLoi(e), 'err'); });
 }
 function huyChart() { S.charts.forEach(c => c.destroy()); S.charts = []; }
 
@@ -358,6 +365,7 @@ VIEWS.nhap = function (el) {
   const N = S.nhap;
   if (N.lopId && !S.lopMap.has(N.lopId)) N.lopId = S.lop[0]?.id || 0;
   const bgh = laBGH();
+  const conSong = giuPhien();
 
   el.innerHTML = `
   <div class="grid-nhap">
@@ -537,11 +545,13 @@ VIEWS.nhap = function (el) {
     if (!rows.length) return;
     const b = $('#btn-ghi'); b.disabled = true; b.textContent = 'Đang lưu…';
     const { error } = await sb.from('vi_pham').insert(rows);
-    if (error) { toast(dichLoi(error), 'err'); veTomTat(); return; }
+    if (error) { toast(dichLoi(error), 'err'); if (conSong()) veTomTat(); return; }
     toast(`Đã ghi nhận ${rows.length} vi phạm.`);
     N.hs.clear(); N.loai.clear();
+    capNhatBadge();
+    if (!conSong()) return;
     $('#ghi-chu').value = ''; $('#tim-hs').value = ''; $('#tg-vp').value = '';
-    veHS(); veLoai(); veTomTat(); veTG(); taiGanDay(); capNhatBadge();
+    veHS(); veLoai(); veTomTat(); veTG(); taiGanDay();
   };
 
   dongBoLoai();
@@ -600,7 +610,10 @@ VIEWS.xuly = async function (el) {
     $('#xl-lop').innerHTML = `<option value="">Tất cả lớp</option>${optLop(F.lop, ds)}`;
   };
 
+  let lanTai = 0;
   async function tai() {
+    const lan = ++lanTai, conSong = giuPhien();
+    const moiNhat = () => lan === lanTai && conSong();
     F.lop = $('#xl-lop').value; F.md = $('#xl-md').value; F.tu = $('#xl-tu').value; F.den = $('#xl-den').value;
     $('#xl-bang').innerHTML = '<p class="muted pad">Đang tải…</p>';
     try {
@@ -613,7 +626,8 @@ VIEWS.xuly = async function (el) {
         if (F.md) q = q.eq('muc_do', +F.md);
         return q;
       });
-    } catch (e) { $('#xl-bang').innerHTML = `<p class="err pad">${esc(dichLoi(e))}</p>`; return; }
+    } catch (e) { if (moiNhat()) $('#xl-bang').innerHTML = `<p class="err pad">${esc(dichLoi(e))}</p>`; return; }
+    if (!moiNhat()) return;   // đã chuyển trang hoặc đã đổi bộ lọc trong lúc tải
     chon.clear();
     ve();
   }
@@ -729,9 +743,9 @@ function moXuLy(ids, nguon, xong) {
     const tt = $('input[name=tt]:checked').value;
     const bp = $('#bp-text').value.trim() || null;
     if (tt !== 'chua_xu_ly' && !bp) { toast('Vui lòng nhập biện pháp xử lý.', 'err'); $('#bp-text').focus(); return; }
-    $('#m-luu').disabled = true;
+    const btnLuu = $('#m-luu'); btnLuu.disabled = true;
     const { data, error } = await sb.from('vi_pham').update({ trang_thai: tt, bien_phap: tt === 'chua_xu_ly' ? null : bp }).in('id', ids).select('id');
-    $('#m-luu').disabled = false;
+    btnLuu.disabled = false;
     if (error) { toast(dichLoi(error), 'err'); return; }
     if (data.length < ids.length) toast(`Chỉ cập nhật được ${data.length}/${ids.length} mục (không đủ quyền).`, 'err');
     else toast(`Đã cập nhật ${data.length} vi phạm.`);
@@ -906,7 +920,10 @@ VIEWS.thongke = async function (el) {
 
   let bangLop = [], bangHS = [], dataCur = [], K = {};
 
+  let lanTai = 0;
   async function tai() {
+    const lan = ++lanTai, conSong = giuPhien();
+    const moiNhat = () => lan === lanTai && conSong();
     F.preset = $('#tk-preset').value;
     if (F.preset !== 'tuy') { K = khoangTK(F.preset); F.tu = K.tu; F.den = K.den; $('#tk-tu').value = K.tu; $('#tk-den').value = K.den; }
     else { F.tu = $('#tk-tu').value; F.den = $('#tk-den').value; K = khoangTK('tuy', F.tu, F.den); }
@@ -932,7 +949,9 @@ VIEWS.thongke = async function (el) {
     });
     let cur, prev;
     try { [cur, prev] = await Promise.all([lay(tu, den), lay(pTu, pDen)]); }
-    catch (e) { $('#tk-kpi').innerHTML = `<p class="err">${esc(dichLoi(e))}</p>`; return; }
+    catch (e) { if (moiNhat()) $('#tk-kpi').innerHTML = `<p class="err">${esc(dichLoi(e))}</p>`; return; }
+    if (!moiNhat()) return;   // đã chuyển trang hoặc đã đổi bộ lọc trong lúc tải
+    huyChart();
     cur.forEach(r => (r.ngay = ngayVN(r.thoi_gian)));
     prev.forEach(r => (r.ngay = ngayVN(r.thoi_gian)));
     dataCur = cur;
@@ -1187,7 +1206,8 @@ VIEWS.hocsinh = function (el) {
       <p class="muted small">Chuyển lớp không ảnh hưởng vi phạm cũ: vi phạm được tính cho lớp tại thời điểm ghi nhận.</p>`
       : `<p class="muted pad">${S.hsLop ? 'Lớp chưa có học sinh.' : ''}</p>`;
   };
-  const lamMoi = async () => { await taiDanhMuc(); ve(); };
+  const conSong = giuPhien();
+  const lamMoi = async () => { await taiDanhMuc(); if (conSong()) ve(); };
   const thucHien = async (p, okMsg, loiFK) => {
     const { error } = await p;
     if (error) { toast(loiFK && /foreign key/i.test(error.message) ? loiFK : dichLoi(error), 'err'); return false; }
@@ -1330,6 +1350,7 @@ function moNhapExcel(xong) {
    5. HÌNH THỨC VI PHẠM
    ===================================================================== */
 VIEWS.loai = function (el) {
+  const conSong = giuPhien();
   el.innerHTML = `<section class="card">
     <h2>Hình thức vi phạm</h2>
     <p class="muted small"><b>Áp dụng cho</b>: “Học sinh” – ghi cho từng em; “Cả lớp” – vi phạm tập thể, ghi cho lớp.
@@ -1367,7 +1388,7 @@ VIEWS.loai = function (el) {
       res = id ? await sb.from('loai_vi_pham').update(row).eq('id', id) : await sb.from('loai_vi_pham').insert(row);
     }
     if (res.error) { toast(/foreign key/i.test(res.error.message) ? 'Hình thức này đã có vi phạm, không thể xóa. Hãy bỏ chọn “Đang dùng”.' : dichLoi(res.error), 'err'); return; }
-    toast('Đã lưu.'); await taiDanhMuc(); ve();
+    toast('Đã lưu.'); await taiDanhMuc(); if (conSong()) ve();
   };
   el.onkeydown = e => { if (e.key === 'Enter' && e.target.matches('#loai-body input')) { e.preventDefault(); e.target.closest('tr').querySelector('[data-luu]').click(); } };
   ve();
@@ -1399,8 +1420,10 @@ VIEWS.nguoidung = async function (el) {
     return '';
   };
 
+  const conSong = giuPhien();
   const tai = async () => {
     await taiDanhMuc();
+    if (!conSong()) return;
     const data = [...S.nd];
     const thuTu = { cho_duyet: 0, admin: 1, bgh: 2, tpt: 3, gvcn: 4, gv: 5 };
     data.sort((a, b) => thuTu[a.vai_tro] - thuTu[b.vai_tro] || String(a.ho_ten).localeCompare(String(b.ho_ten), 'vi'));
@@ -1429,7 +1452,7 @@ VIEWS.nguoidung = async function (el) {
     const { data, error } = await sb.from('nguoi_dung').update(row).eq('id', id).select('id');
     if (error || !data.length) { toast(error ? dichLoi(error) : 'Không đủ quyền.', 'err'); return; }
     toast('Đã cập nhật.');
-    if (vt === 'gvcn' && !S.lop.some(l => l.gvcn_id === id)) { await tai(); moGanLop(id, tai); }
+    if (vt === 'gvcn' && !S.lop.some(l => l.gvcn_id === id)) { await tai(); if (conSong()) moGanLop(id, tai); }
     else await tai();
   };
   await tai();

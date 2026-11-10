@@ -8,6 +8,7 @@ let sb = null;
 const S = {
   user: null, profile: null,
   dt: [], lop: [], hs: [], loai: [], nd: [],
+  tptDT: new Map(),   // id Tổng phụ trách → [id điểm trường]; rỗng = toàn trường
   dtMap: new Map(), lopMap: new Map(), hsMap: new Map(), ndMap: new Map(), stt: new Map(),
   charts: []
 };
@@ -75,9 +76,13 @@ function coTheXuLy(r) {
   const l = S.lopMap.get(r.lop_id);
   if (!l) return false;
   if (vt === 'gvcn') return l.gvcn_id === S.user.id;
-  if (vt === 'tpt') return !S.profile.diem_truong_id || l.diem_truong_id === S.profile.diem_truong_id;
+  if (vt === 'tpt') { const ds = dtCuaTPT(S.user.id); return !ds.length || ds.includes(l.diem_truong_id); }
   return false;
 }
+
+/** Các điểm trường giao cho một Tổng phụ trách (mảng rỗng = toàn trường) */
+const dtCuaTPT = uid => (S.tptDT.get(uid) || []).filter(id => S.dtMap.has(id));
+const tenDTCuaTPT = uid => { const ds = dtCuaTPT(uid); return ds.length ? ds.map(tenDT).join(', ') : 'toàn trường'; };
 
 /** Nhóm lớp theo điểm trường: [[dtId|null, [lớp…]], …] */
 function nhomTheoDT(ds) {
@@ -292,13 +297,16 @@ async function vaoApp(user) {
 }
 
 async function taiDanhMuc() {
-  const [dt, lop, hs, loai, nd] = await Promise.all([
+  const [dt, lop, hs, loai, nd, tpt] = await Promise.all([
     layHet(() => sb.from('diem_truong').select('*').order('thu_tu').order('id')),
     layHet(() => sb.from('lop').select('*').order('id')),
     layHet(() => sb.from('hoc_sinh').select('id,ho_ten,lop_id,dang_hoc').order('id')),
     layHet(() => sb.from('loai_vi_pham').select('*').order('thu_tu').order('id')),
-    layHet(() => sb.from('nguoi_dung').select('id,ho_ten,email,vai_tro,diem_truong_id').order('id'))
+    layHet(() => sb.from('nguoi_dung').select('id,ho_ten,email,vai_tro').order('id')),
+    layHet(() => sb.from('tpt_diem_truong').select('nguoi_dung_id,diem_truong_id').order('diem_truong_id'))
   ]);
+  S.tptDT = new Map();
+  tpt.forEach(r => { if (!S.tptDT.has(r.nguoi_dung_id)) S.tptDT.set(r.nguoi_dung_id, []); S.tptDT.get(r.nguoi_dung_id).push(r.diem_truong_id); });
   lop.sort((a, b) => (a.khoi ?? 99) - (b.khoi ?? 99) || a.ten_lop.localeCompare(b.ten_lop, 'vi', { numeric: true }));
   hs.sort(soSanhTen);
   S.dt = dt; S.lop = lop; S.hs = hs; S.loai = loai; S.nd = nd;
@@ -569,7 +577,7 @@ function moTaQuyenXuLy() {
     return ds.length ? `Bạn được xử lý vi phạm mức Nhẹ, Trung bình của lớp ${ds.join(', ')}. Vi phạm mức Nặng do Ban giám hiệu xử lý.`
       : 'Bạn chưa được giao lớp chủ nhiệm. Báo Quản trị viên để được gán lớp.';
   }
-  if (vt === 'tpt') return `Bạn được xử lý vi phạm mức Nhẹ, Trung bình của ${S.profile.diem_truong_id ? 'điểm trường ' + tenDT(S.profile.diem_truong_id) : 'toàn trường'}. Vi phạm mức Nặng do Ban giám hiệu xử lý.`;
+  if (vt === 'tpt') { const ds = dtCuaTPT(S.user.id); return `Bạn được xử lý vi phạm mức Nhẹ, Trung bình của ${ds.length ? 'điểm trường ' + tenDTCuaTPT(S.user.id) : 'toàn trường'}. Vi phạm mức Nặng do Ban giám hiệu xử lý.`; }
   return 'Giáo viên được xem danh sách; việc xử lý do GV chủ nhiệm, Tổng phụ trách và Ban giám hiệu thực hiện.';
 }
 
@@ -1403,7 +1411,7 @@ VIEWS.nguoidung = async function (el) {
     <ul class="small quyen">
       <li><b>Giáo viên</b>: ghi nhận vi phạm, xem danh sách và thống kê.</li>
       <li><b>GV chủ nhiệm</b>: thêm quyền xử lý vi phạm mức Nhẹ, Trung bình của lớp được giao.</li>
-      <li><b>Tổng phụ trách</b>: thêm quyền xử lý vi phạm mức Nhẹ, Trung bình của điểm trường được giao (không giao = toàn trường).</li>
+      <li><b>Tổng phụ trách</b>: thêm quyền xử lý vi phạm mức Nhẹ, Trung bình của các điểm trường được giao (có thể giao nhiều điểm; không giao = toàn trường).</li>
       <li><b>Ban giám hiệu</b>: xử lý mọi vi phạm (kể cả mức Nặng), quản lý điểm trường, lớp, học sinh, hình thức vi phạm.</li>
       <li><b>Quản trị</b>: toàn quyền, thêm cấp quyền tài khoản.</li>
     </ul>
@@ -1415,7 +1423,7 @@ VIEWS.nguoidung = async function (el) {
       return `<span class="small">${ds.length ? esc(ds.join(', ')) : '<span class="muted">Chưa gán lớp</span>'}</span> <button type="button" class="link" data-gan-lop="${u.id}">Gán lớp</button>`;
     }
     if (vt === 'tpt') return coDT()
-      ? `<select class="input sm" name="diem_truong_id"><option value="">Toàn trường</option>${optDT(u.diem_truong_id)}</select>`
+      ? `<span class="small">${dtCuaTPT(u.id).length ? esc(tenDTCuaTPT(u.id)) : '<span class="muted">Toàn trường</span>'}</span> <button type="button" class="link" data-gan-dt="${u.id}">Gán điểm trường</button>`
       : '<span class="small muted">Toàn trường</span>';
     return '';
   };
@@ -1443,12 +1451,13 @@ VIEWS.nguoidung = async function (el) {
   el.onclick = async e => {
     const g = e.target.closest('[data-gan-lop]');
     if (g) { moGanLop(g.dataset.ganLop, tai); return; }
+    const gd = e.target.closest('[data-gan-dt]');
+    if (gd) { moGanDT(gd.dataset.ganDt, tai); return; }
     const b = e.target.closest('[data-luu]'); if (!b) return;
     const tr = b.closest('tr'), id = tr.dataset.id;
     const vt = tr.querySelector('[name=vai_tro]').value;
     if (id === S.user.id && vt !== 'admin' && !confirm('Bạn đang tự bỏ quyền Quản trị của mình. Tiếp tục?')) return;
-    const dtSel = tr.querySelector('[name=diem_truong_id]');
-    const row = { ho_ten: tr.querySelector('[name=ho_ten]').value.trim() || null, vai_tro: vt, diem_truong_id: vt === 'tpt' && dtSel?.value ? +dtSel.value : null };
+    const row = { ho_ten: tr.querySelector('[name=ho_ten]').value.trim() || null, vai_tro: vt };
     const { data, error } = await sb.from('nguoi_dung').update(row).eq('id', id).select('id');
     if (error || !data.length) { toast(error ? dichLoi(error) : 'Không đủ quyền.', 'err'); return; }
     toast('Đã cập nhật.');
@@ -1457,6 +1466,27 @@ VIEWS.nguoidung = async function (el) {
   };
   await tai();
 };
+
+function moGanDT(uid, xong) {
+  const u = S.ndMap.get(uid), daGan = dtCuaTPT(uid);
+  moModal(`<h2>Gán điểm trường cho Tổng phụ trách</h2><p class="muted">${esc(u?.ho_ten || u?.email || '')}</p>
+    <div class="luoi-lop">${S.dt.map(d => {
+      const khac = S.nd.filter(x => x.id !== uid && x.vai_tro === 'tpt' && dtCuaTPT(x.id).includes(d.id)).map(x => x.ho_ten || x.email);
+      return `<label class="radio o-lop"><input type="checkbox" value="${d.id}" ${daGan.includes(d.id) ? 'checked' : ''}> ${esc(d.ten)}${khac.length ? ` <span class="muted small">(cùng: ${esc(khac.join(', '))})</span>` : ''}</label>`;
+    }).join('')}</div>
+    <p class="muted small">Chọn một hoặc nhiều điểm trường. <b>Không chọn điểm nào = phụ trách toàn trường.</b> Một điểm trường có thể giao cho nhiều Tổng phụ trách.</p>
+    <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button><button type="button" class="btn primary" id="gd-luu">Lưu</button></div>`);
+  $('#gd-luu').onclick = async () => {
+    const chon = $$('#modal-body input[type=checkbox]:checked').map(i => +i.value);
+    const btn = $('#gd-luu'); btn.disabled = true;
+    let r = await sb.from('tpt_diem_truong').delete().eq('nguoi_dung_id', uid);
+    if (!r.error && chon.length) r = await sb.from('tpt_diem_truong').insert(chon.map(id => ({ nguoi_dung_id: uid, diem_truong_id: id })));
+    btn.disabled = false;
+    if (r.error) { toast(dichLoi(r.error), 'err'); return; }
+    toast(chon.length ? `Đã gán ${chon.length} điểm trường.` : 'Đã đặt phụ trách toàn trường.');
+    dongModal(); await xong();
+  };
+}
 
 function moGanLop(uid, xong) {
   const u = S.ndMap.get(uid);

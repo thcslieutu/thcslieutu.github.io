@@ -1415,7 +1415,35 @@ VIEWS.nguoidung = async function (el) {
       <li><b>Ban giám hiệu</b>: xử lý mọi vi phạm (kể cả mức Nặng), quản lý điểm trường, lớp, học sinh, hình thức vi phạm.</li>
       <li><b>Quản trị</b>: toàn quyền, thêm cấp quyền tài khoản.</li>
     </ul>
-    <div class="table-wrap" id="nd-bang"><p class="muted pad">Đang tải…</p></div></section>`;
+    <div class="table-wrap" id="nd-bang"><p class="muted pad">Đang tải…</p></div></section>
+  <section class="card nguy-hiem">
+    <h2>Xóa dữ liệu</h2>
+    <p class="small"><b>Thao tác không thể hoàn tác.</b> Nên tải bản sao lưu trước khi xóa.</p>
+    <div class="row-gap wrap mb">
+      <button type="button" class="btn sm" id="sl-vp">Sao lưu toàn bộ vi phạm (CSV)</button>
+      <button type="button" class="btn sm" id="sl-hs">Sao lưu danh sách học sinh (CSV)</button>
+    </div>
+    <div class="xoa-chon">
+      <label class="radio"><input type="checkbox" id="x-vp" checked> <b>Vi phạm</b></label>
+      <div class="xoa-con" id="x-vp-con">
+        <label class="radio"><input type="radio" name="x-pv" value="het" checked> Tất cả vi phạm</label>
+        <label class="radio"><input type="radio" name="x-pv" value="truoc"> Chỉ vi phạm xảy ra trước ngày
+          <input type="date" id="x-ngay" class="input sm o-ngay"></label>
+      </div>
+      <label class="radio"><input type="checkbox" id="x-hs"> <b>Học sinh, lớp, điểm trường</b> <span class="muted small">(kéo theo xóa toàn bộ vi phạm)</span></label>
+      <label class="radio"><input type="checkbox" id="x-loai"> <b>Danh mục hình thức vi phạm</b> <span class="muted small">(kéo theo xóa toàn bộ vi phạm)</span></label>
+      <label class="radio"><input type="checkbox" id="x-tk"> <b>Tài khoản</b> <span class="muted small">(mọi tài khoản trừ Quản trị)</span></label>
+    </div>
+    <button type="button" class="btn danger" id="x-mo">Xóa dữ liệu đã chọn…</button>
+  </section>`;
+
+  const dongBoXoa = () => {
+    const keoTheo = $('#x-hs').checked || $('#x-loai').checked;
+    if (keoTheo) { $('#x-vp').checked = true; $('input[name=x-pv][value=het]').checked = true; }
+    $('#x-vp').disabled = keoTheo;
+    $$('#x-vp-con input').forEach(i => (i.disabled = keoTheo || !$('#x-vp').checked));
+  };
+  dongBoXoa();
 
   const oPhuTrach = (u, vt) => {
     if (vt === 'gvcn') {
@@ -1443,12 +1471,26 @@ VIEWS.nguoidung = async function (el) {
   };
 
   el.onchange = e => {
+    if (['x-vp', 'x-hs', 'x-loai'].includes(e.target.id)) { dongBoXoa(); return; }
+    if (e.target.id === 'x-ngay') { $('input[name=x-pv][value=truoc]').checked = true; return; }
     if (e.target.name === 'vai_tro') {
       const tr = e.target.closest('tr'), u = S.ndMap.get(tr.dataset.id);
       tr.querySelector('.phu-trach').innerHTML = oPhuTrach(u, e.target.value);
     }
   };
   el.onclick = async e => {
+    if (e.target.id === 'sl-vp') { saoLuuViPham(e.target); return; }
+    if (e.target.id === 'sl-hs') { saoLuuHocSinh(); return; }
+    if (e.target.id === 'x-mo') {
+      const chon = {
+        vp: $('#x-vp').checked, hs: $('#x-hs').checked, loai: $('#x-loai').checked, tk: $('#x-tk').checked,
+        truoc: $('#x-vp').checked && !$('#x-vp').disabled && $('input[name=x-pv]:checked').value === 'truoc' ? $('#x-ngay').value : null
+      };
+      if (!chon.vp && !chon.hs && !chon.loai && !chon.tk) { toast('Chưa chọn dữ liệu cần xóa.', 'err'); return; }
+      if ($('input[name=x-pv]:checked').value === 'truoc' && chon.vp && !chon.hs && !chon.loai && !chon.truoc) { toast('Chọn ngày cho mục “trước ngày”.', 'err'); return; }
+      moXoaDuLieu(chon, tai);
+      return;
+    }
     const g = e.target.closest('[data-gan-lop]');
     if (g) { moGanLop(g.dataset.ganLop, tai); return; }
     const gd = e.target.closest('[data-gan-dt]');
@@ -1466,6 +1508,74 @@ VIEWS.nguoidung = async function (el) {
   };
   await tai();
 };
+
+/* ---------- Sao lưu & xóa dữ liệu (Quản trị) ---------- */
+async function saoLuuViPham(btn) {
+  btn.disabled = true; const cu = btn.textContent; btn.textContent = 'Đang tải…';
+  try {
+    const rows = await layHet(() => sb.from('v_vi_pham').select('*').order('thoi_gian').order('id'));
+    xuatCSV(`sao-luu-vi-pham_${homNay()}.csv`,
+      ['Thời gian', 'Ghi lúc', 'Học sinh', 'Lớp', 'Điểm trường', 'Vi phạm', 'Áp dụng cho', 'Nhóm', 'Mức độ', 'Điểm trừ', 'Ghi chú', 'Người ghi', 'Trạng thái', 'Biện pháp', 'Người xử lý', 'Thời gian xử lý'],
+      rows.map(r => [fmtTG(r.thoi_gian), fmtTG(r.tao_luc), tenHS(r), r.ten_lop, r.ten_diem_truong, r.ten_vi_pham, PHAM_VI[r.pham_vi], r.nhom, MUC_DO[r.muc_do], +r.diem_tru, r.ghi_chu, r.ten_nguoi_ghi,
+        TRANG_THAI[r.trang_thai], r.bien_phap, r.ten_nguoi_xu_ly, r.thoi_gian_xu_ly ? fmtTG(r.thoi_gian_xu_ly) : '']));
+    toast(`Đã tải ${rows.length} vi phạm.`);
+  } catch (e) { toast(dichLoi(e), 'err'); }
+  btn.disabled = false; btn.textContent = cu;
+}
+
+function saoLuuHocSinh() {
+  const ds = [...S.hs].sort((a, b) => tenLop(a.lop_id).localeCompare(tenLop(b.lop_id), 'vi', { numeric: true }) || soSanhTen(a, b));
+  xuatCSV(`sao-luu-hoc-sinh_${homNay()}.csv`, ['Họ tên', 'Lớp', 'Điểm trường', 'Tình trạng'],
+    ds.map(h => [h.ho_ten, tenLop(h.lop_id), tenDT(S.lopMap.get(h.lop_id)?.diem_truong_id), h.dang_hoc ? 'Đang học' : 'Đã nghỉ']));
+  toast(`Đã tải ${ds.length} học sinh.`);
+}
+
+async function moXoaDuLieu(chon, xong) {
+  const MA = 'XOA DU LIEU';
+  const vpHet = chon.hs || chon.loai || !chon.truoc;
+  moModal(`<h2>Xác nhận xóa dữ liệu</h2><div id="xd-tom-tat"><p class="muted">Đang đếm dữ liệu…</p></div>
+    <p class="small">Gõ <b>${MA}</b> vào ô dưới để xác nhận:</p>
+    <input class="input" id="xd-ma" autocomplete="off" placeholder="${MA}">
+    <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button>
+      <button type="button" class="btn danger-solid" id="xd-ok" disabled>Xóa vĩnh viễn</button></div>`);
+
+  const dem = async q => { const { count, error } = await q; if (error) throw error; return count || 0; };
+  const head = t => sb.from(t).select('*', { count: 'exact', head: true });
+  let muc = [];
+  try {
+    if (chon.vp || vpHet && (chon.hs || chon.loai)) {
+      let q = head('vi_pham');
+      if (!vpHet) q = q.lt('thoi_gian', tuNgay(chon.truoc));
+      muc.push(`<b>${so(await dem(q))}</b> vi phạm${vpHet ? '' : ` xảy ra trước ngày ${vn(chon.truoc)}`}`);
+    }
+    if (chon.hs) muc.push(`<b>${so(await dem(head('hoc_sinh')))}</b> học sinh, <b>${S.lop.length}</b> lớp, <b>${S.dt.length}</b> điểm trường`);
+    if (chon.loai) muc.push(`<b>${S.loai.length}</b> hình thức vi phạm`);
+    if (chon.tk) muc.push(`<b>${S.nd.filter(u => u.vai_tro !== 'admin').length}</b> tài khoản (không phải Quản trị)`);
+  } catch (e) { $('#xd-tom-tat') && ($('#xd-tom-tat').innerHTML = `<p class="err">${esc(dichLoi(e))}</p>`); return; }
+  const box = $('#xd-tom-tat'); if (!box) return;
+  box.innerHTML = `<div class="info-box canh-bao-do"><p class="small">Sẽ xóa vĩnh viễn:</p><ul class="small">${muc.map(m => `<li>${m}</li>`).join('')}</ul>
+    <p class="small">Không thể khôi phục sau khi xóa.</p></div>`;
+
+  $('#xd-ma').oninput = e => ($('#xd-ok').disabled = e.target.value.trim().toUpperCase() !== MA);
+  $('#xd-ma').focus();
+  $('#xd-ok').onclick = async () => {
+    const btn = $('#xd-ok'); btn.disabled = true; btn.textContent = 'Đang xóa…';
+    const { data, error } = await sb.rpc('xoa_du_lieu', {
+      p_vi_pham: !!(chon.vp || chon.hs || chon.loai), p_truoc_ngay: vpHet ? null : chon.truoc,
+      p_hoc_sinh: !!chon.hs, p_loai: !!chon.loai, p_tai_khoan: !!chon.tk
+    });
+    if (error) {
+      toast(/function .*xoa_du_lieu|Could not find the function/i.test(error.message) ? 'Chưa cập nhật cơ sở dữ liệu: hãy chạy lại file schema.sql trên Supabase.' : dichLoi(error), 'err');
+      btn.disabled = false; btn.textContent = 'Xóa vĩnh viễn'; return;
+    }
+    const kq = [['vi_pham', 'vi phạm'], ['hoc_sinh', 'học sinh'], ['lop', 'lớp'], ['diem_truong', 'điểm trường'], ['loai_vi_pham', 'hình thức'], ['tai_khoan', 'tài khoản']]
+      .filter(([k]) => data?.[k]).map(([k, t]) => `${data[k]} ${t}`).join(', ');
+    toast(kq ? `Đã xóa: ${kq}.` : 'Không có dữ liệu nào cần xóa.');
+    S.nhap = null; S.hsLop = null;
+    dongModal(); capNhatBadge();
+    await xong();
+  };
+}
 
 function moGanDT(uid, xong) {
   const u = S.ndMap.get(uid), daGan = dtCuaTPT(uid);

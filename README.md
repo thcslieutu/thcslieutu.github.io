@@ -13,8 +13,8 @@ Tác giả: **Lâm Hòa Văn** – SĐT 0977.364.202 – Giáo viên Trường T
 | **Xử lý** | GVCN, TPT, BGH xử lý; GV xem | Lọc theo trạng thái, điểm trường, lớp, mức độ, ngày, tên. Xử lý hàng loạt, xuất CSV. |
 | **Thống kê** | Mọi người | Mặc định **Tuần này so với Tuần trước** (có tháng, học kỳ, năm, tùy chọn). Phạm vi toàn trường / điểm trường / lớp. Biểu đồ diễn biến, hình thức, nhóm, mức độ, tình trạng xử lý, thứ trong tuần × buổi, điểm trường, lớp; mục “Cần chú ý”; bảng lớp, học sinh, người ghi nhận. |
 | **Học sinh** | BGH | Điểm trường (không bắt buộc); lớp (điểm trường, GVCN); học sinh; dán danh sách từ Excel. |
-| **Hình thức VP** | BGH | Áp dụng cho học sinh / cả lớp, nhóm, mức độ, điểm trừ, bật/tắt. |
-| **Tài khoản** | Quản trị | Duyệt giáo viên đăng ký, cấp vai trò, gán lớp chủ nhiệm, gán điểm trường cho Tổng phụ trách. |
+| **Hình thức VP** | BGH | Danh mục hình thức vi phạm (áp dụng cho học sinh / cả lớp, nhóm, mức độ, điểm trừ, bật/tắt) và danh mục **biện pháp xử lý** (tên, nhóm, thứ tự, bật/tắt – **chỉ Quản trị** được sửa, BGH chỉ xem). |
+| **Tài khoản** | Quản trị | Duyệt giáo viên đăng ký, cấp vai trò, gán lớp chủ nhiệm, gán một hoặc nhiều điểm trường cho Tổng phụ trách. |
 
 ## Phân quyền
 
@@ -23,7 +23,7 @@ Tác giả: **Lâm Hòa Văn** – SĐT 0977.364.202 – Giáo viên Trường T
 | Chờ duyệt | Chưa xem được dữ liệu |
 | Giáo viên | Ghi nhận vi phạm, xem danh sách và thống kê |
 | GV chủ nhiệm | + Xử lý vi phạm mức **Nhẹ, Trung bình** của lớp mình chủ nhiệm |
-| Tổng phụ trách | + Xử lý vi phạm mức **Nhẹ, Trung bình** của điểm trường được giao (không giao = toàn trường) |
+| Tổng phụ trách | + Xử lý vi phạm mức **Nhẹ, Trung bình** của các điểm trường được giao (giao được nhiều điểm; không giao = toàn trường) |
 | Ban giám hiệu | Xử lý mọi vi phạm, **kể cả mức Nặng**; quản lý điểm trường, lớp, học sinh, hình thức vi phạm |
 | Quản trị | Toàn quyền, thêm cấp quyền tài khoản |
 

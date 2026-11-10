@@ -17,7 +17,7 @@ const VAI_TRO = { cho_duyet: 'Chờ duyệt', gv: 'Giáo viên', gvcn: 'GV chủ
 const TRANG_THAI = { chua_xu_ly: 'Chưa xử lý', dang_xu_ly: 'Đang xử lý', da_xu_ly: 'Đã xử lý' };
 const MUC_DO = { 1: 'Nhẹ', 2: 'Trung bình', 3: 'Nặng' };
 const PHAM_VI = { hoc_sinh: 'Học sinh', lop: 'Cả lớp' };
-const BIEN_PHAP = ['Nhắc nhở', 'Phê bình trước lớp', 'Viết bản tự kiểm điểm', 'Thông báo PHHS',
+const BIEN_PHAP_MAC_DINH = ['Nhắc nhở', 'Phê bình trước lớp', 'Viết bản tự kiểm điểm', 'Thông báo PHHS',
   'Mời PHHS đến trường', 'Lao động vệ sinh', 'Hạ mức đánh giá rèn luyện', 'Đưa ra Hội đồng kỷ luật'];
 const PHUT_HUY = CFG.PHUT_DUOC_HUY || 15;
 const NGAY_LUI = CFG.SO_NGAY_DUOC_LUI ?? 7;
@@ -297,14 +297,18 @@ async function vaoApp(user) {
 }
 
 async function taiDanhMuc() {
-  const [dt, lop, hs, loai, nd, tpt] = await Promise.all([
+  const [dt, lop, hs, loai, nd, tpt, bp] = await Promise.all([
     layHet(() => sb.from('diem_truong').select('*').order('thu_tu').order('id')),
     layHet(() => sb.from('lop').select('*').order('id')),
     layHet(() => sb.from('hoc_sinh').select('id,ho_ten,lop_id,dang_hoc').order('id')),
     layHet(() => sb.from('loai_vi_pham').select('*').order('thu_tu').order('id')),
     layHet(() => sb.from('nguoi_dung').select('id,ho_ten,email,vai_tro').order('id')),
-    layHet(() => sb.from('tpt_diem_truong').select('nguoi_dung_id,diem_truong_id').order('diem_truong_id'))
+    layHet(() => sb.from('tpt_diem_truong').select('nguoi_dung_id,diem_truong_id').order('diem_truong_id')),
+    // Danh mục biện pháp: nếu chưa chạy schema.sql mới thì dùng danh sách mặc định, không làm hỏng trang
+    layHet(() => sb.from('bien_phap').select('*').order('thu_tu').order('id')).catch(() => null)
   ]);
+  S.bp = bp || BIEN_PHAP_MAC_DINH.map((ten, i) => ({ id: -i - 1, ten, nhom: null, thu_tu: i + 1, dang_dung: true }));
+  S.bpBang = !!bp;
   S.tptDT = new Map();
   tpt.forEach(r => { if (!S.tptDT.has(r.nguoi_dung_id)) S.tptDT.set(r.nguoi_dung_id, []); S.tptDT.get(r.nguoi_dung_id).push(r.diem_truong_id); });
   lop.sort((a, b) => (a.khoi ?? 99) - (b.khoi ?? 99) || a.ten_lop.localeCompare(b.ten_lop, 'vi', { numeric: true }));
@@ -721,6 +725,16 @@ VIEWS.xuly = async function (el) {
   await tai();
 };
 
+/** Các nút chọn nhanh biện pháp xử lý, nhóm theo “Nhóm” trong danh mục */
+function chipBienPhap() {
+  const ds = (S.bp || []).filter(b => b.dang_dung);
+  if (!ds.length) return '<p class="muted small">Chưa có biện pháp mẫu. Ban giám hiệu thêm ở mục <b>Hình thức VP</b>.</p>';
+  const nhom = new Map();
+  ds.forEach(b => { const k = b.nhom || ''; if (!nhom.has(k)) nhom.set(k, []); nhom.get(k).push(b); });
+  const chip = b => `<button type="button" class="chip" data-bp="${esc(b.ten)}">${esc(b.ten)}</button>`;
+  return [...nhom].map(([k, a]) => (nhom.size > 1 && k ? `<div class="nhom-ten">${esc(k)}</div>` : '') + `<div class="chips">${a.map(chip).join('')}</div>`).join('');
+}
+
 function moXuLy(ids, nguon, xong) {
   const one = ids.length === 1 ? nguon.find(r => r.id === ids[0]) : null;
   moModal(`<h2>${one ? 'Xử lý vi phạm' : `Xử lý ${ids.length} vi phạm`}</h2>
@@ -728,7 +742,7 @@ function moXuLy(ids, nguon, xong) {
       <div class="muted small">${fmtTG(one.thoi_gian)}${one.ten_nguoi_ghi ? ' · ghi bởi ' + esc(one.ten_nguoi_ghi) : ''}</div>
       ${one.ghi_chu ? `<div class="small">Ghi chú: ${esc(one.ghi_chu)}</div>` : ''}</div>` : ''}
     <div class="lbl">Biện pháp xử lý <span class="muted small">(bấm để chèn nhanh)</span></div>
-    <div class="chips" id="bp-chips">${BIEN_PHAP.map(b => `<button type="button" class="chip" data-bp="${esc(b)}">${esc(b)}</button>`).join('')}</div>
+    <div id="bp-chips">${chipBienPhap()}</div>
     <textarea id="bp-text" class="input" rows="3" placeholder="Ghi rõ biện pháp, kết quả xử lý…">${esc(one?.bien_phap || '')}</textarea>
     <div class="lbl">Trạng thái</div>
     <div class="radio-row">
@@ -1366,7 +1380,32 @@ VIEWS.loai = function (el) {
     Hình thức đã phát sinh vi phạm nên <b>tắt “Đang dùng”</b> thay vì xóa.</p>
     <div class="table-wrap"><table class="tbl edit"><thead><tr><th>Thứ tự</th><th>Tên hình thức vi phạm</th><th>Áp dụng cho</th><th>Nhóm</th><th>Mức độ</th><th>Điểm trừ</th><th>Đang dùng</th><th></th></tr></thead>
     <tbody id="loai-body"></tbody></table></div>
-    <datalist id="dl-nhom"></datalist></section>`;
+    <datalist id="dl-nhom"></datalist></section>
+  <section class="card">
+    <h2>Biện pháp xử lý</h2>
+    <p class="muted small">Danh sách nút chọn nhanh khi xử lý vi phạm. Có thể thêm, sửa tên, xếp nhóm, sắp thứ tự hoặc tắt.
+    Sửa hay xóa ở đây <b>không ảnh hưởng</b> các vi phạm đã xử lý trước đó. Người xử lý vẫn có thể gõ thêm nội dung riêng.</p>
+    ${laAdmin() ? '' : '<p class="small canh-bao">Chỉ <b>Quản trị</b> được thêm, sửa, xóa danh mục này. Ban giám hiệu chỉ xem.</p>'}
+    ${S.bpBang ? '' : '<p class="err small">Chưa cập nhật cơ sở dữ liệu: hãy chạy lại file schema.sql trên Supabase để lưu được danh mục này.</p>'}
+    <div class="table-wrap"><table class="tbl edit"><thead><tr><th>Thứ tự</th><th>Tên biện pháp</th><th>Nhóm</th><th>Đang dùng</th><th></th></tr></thead>
+    <tbody id="bp-body"></tbody></table></div>
+    <datalist id="dl-nhom-bp"></datalist></section>`;
+  const suaBP = laAdmin();
+  const dongBP = b => !suaBP
+    ? `<tr><td>${b.thu_tu ?? ''}</td><td>${esc(b.ten)}</td><td>${esc(b.nhom || '')}</td><td class="c">${b.dang_dung !== false ? '✓' : '<span class="muted">Tắt</span>'}</td><td></td></tr>`
+    : `<tr data-id="${b.id > 0 ? b.id : ''}" class="${b.id > 0 ? '' : 'new-row'}">
+    <td><input class="input sm num" name="thu_tu" type="number" value="${b.thu_tu ?? ''}"></td>
+    <td><input class="input sm" name="ten" value="${esc(b.ten || '')}" placeholder="${b.id > 0 ? '' : '+ Thêm biện pháp mới…'}"></td>
+    <td><input class="input sm" name="nhom" list="dl-nhom-bp" value="${esc(b.nhom || '')}"></td>
+    <td class="c"><input type="checkbox" name="dang_dung" ${b.dang_dung !== false ? 'checked' : ''}></td>
+    <td class="nowrap"><button type="button" class="btn sm ${b.id > 0 ? '' : 'primary'}" data-luu>${b.id > 0 ? 'Lưu' : 'Thêm'}</button>${b.id > 0 ? '<button type="button" class="link danger" data-xoa>Xóa</button>' : ''}</td></tr>`;
+  const veBP = () => {
+    const ds = S.bpBang ? S.bp : [];
+    const maxTT = Math.max(0, ...ds.map(b => b.thu_tu || 0));
+    $('#bp-body').innerHTML = ds.map(dongBP).join('') + (S.bpBang && suaBP ? dongBP({ thu_tu: maxTT + 1 }) : '');
+    $('#dl-nhom-bp').innerHTML = ['Biện pháp kỷ luật', 'Hỗ trợ khắc phục', 'Phối hợp gia đình', ...ds.map(b => b.nhom)]
+      .filter((n, i, a) => n && a.indexOf(n) === i).map(n => `<option value="${esc(n)}">`).join('');
+  };
   const dong = l => `<tr data-id="${l.id || ''}" class="${l.id ? '' : 'new-row'}">
     <td><input class="input sm num" name="thu_tu" type="number" value="${l.thu_tu ?? ''}"></td>
     <td><input class="input sm" name="ten" value="${esc(l.ten || '')}" placeholder="${l.id ? '' : '+ Thêm hình thức mới…'}"></td>
@@ -1387,6 +1426,20 @@ VIEWS.loai = function (el) {
     const tr = b.closest('tr'), id = +tr.dataset.id || null;
     const v = n => tr.querySelector(`[name=${n}]`);
     let res;
+    if (tr.closest('#bp-body')) {             // ----- Biện pháp xử lý (chỉ Quản trị)
+      if (!laAdmin()) return;
+      if (b.dataset.xoa !== undefined) {
+        if (!confirm(`Xóa biện pháp “${v('ten').value}” khỏi danh mục?`)) return;
+        res = await sb.from('bien_phap').delete().eq('id', id);
+      } else {
+        const row = { ten: v('ten').value.trim(), nhom: v('nhom').value.trim() || null, dang_dung: v('dang_dung').checked, thu_tu: +v('thu_tu').value || 0 };
+        if (!row.ten) { toast('Nhập tên biện pháp.', 'err'); v('ten').focus(); return; }
+        res = id ? await sb.from('bien_phap').update(row).eq('id', id) : await sb.from('bien_phap').insert(row);
+      }
+      if (res.error) { toast(dichLoi(res.error), 'err'); return; }
+      toast('Đã lưu.'); await taiDanhMuc(); if (conSong()) veBP();
+      return;
+    }
     if (b.dataset.xoa !== undefined) {
       if (!confirm('Xóa hình thức vi phạm này?')) return;
       res = await sb.from('loai_vi_pham').delete().eq('id', id);
@@ -1398,8 +1451,8 @@ VIEWS.loai = function (el) {
     if (res.error) { toast(/foreign key/i.test(res.error.message) ? 'Hình thức này đã có vi phạm, không thể xóa. Hãy bỏ chọn “Đang dùng”.' : dichLoi(res.error), 'err'); return; }
     toast('Đã lưu.'); await taiDanhMuc(); if (conSong()) ve();
   };
-  el.onkeydown = e => { if (e.key === 'Enter' && e.target.matches('#loai-body input')) { e.preventDefault(); e.target.closest('tr').querySelector('[data-luu]').click(); } };
-  ve();
+  el.onkeydown = e => { if (e.key === 'Enter' && e.target.matches('#loai-body input, #bp-body input')) { e.preventDefault(); e.target.closest('tr').querySelector('[data-luu]').click(); } };
+  ve(); veBP();
 };
 
 /* =====================================================================

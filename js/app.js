@@ -827,6 +827,38 @@ function chiTietLop(lopId, ds, tieuDeKy) {
   $('#modal-body').onclick = e => { const t = e.target.closest('[data-lsu]'); if (t) { e.preventDefault(); lichSuHS(+t.dataset.lsu); } };
 }
 
+/** Bộ lọc loại vi phạm trong Thống kê: cả nhóm ("n:<tên nhóm>") hoặc từng loại (id) */
+function optLoaiTK(sel) {
+  const nhom = new Map();
+  [...S.loai].sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0)).forEach(l => { const k = l.nhom || ''; if (!nhom.has(k)) nhom.set(k, []); nhom.get(k).push(l); });
+  const o = (v, t) => `<option value="${esc(v)}" ${String(sel) === String(v) ? 'selected' : ''}>${t}</option>`;
+  return o('', 'Tất cả loại vi phạm') + [...nhom].map(([k, a]) =>
+    `<optgroup label="${esc(k || 'Khác')}">${o('n:' + k, `— Cả nhóm ${esc(k || 'Khác')} —`)}${a.map(l => o(l.id, esc(l.ten) + (l.dang_dung ? '' : ' (đã tắt)'))).join('')}</optgroup>`).join('');
+}
+const moTaLoaiTK = v => v.startsWith('n:') ? `nhóm ${v.slice(2) || 'Khác'}` : (S.loai.find(l => l.id === +v)?.ten || '');
+
+/** Chi tiết một loại vi phạm trong khoảng thời gian đang thống kê */
+function chiTietLoai(loaiId, ds, tieuDeKy) {
+  const a = ds.filter(r => r.loai_id === loaiId);
+  const l = S.loai.find(x => x.id === loaiId) || { ten: a[0]?.ten_vi_pham };
+  const theoLop = new Map(), theoHS = new Map();
+  a.forEach(r => {
+    theoLop.set(r.ten_lop, (theoLop.get(r.ten_lop) || 0) + 1);
+    if (r.hoc_sinh_id) { const o = theoHS.get(r.hoc_sinh_id) || { id: r.hoc_sinh_id, ten: r.ho_ten, lop: r.ten_lop, c: 0 }; o.c++; theoHS.set(r.hoc_sinh_id, o); }
+  });
+  const lop = [...theoLop].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'vi', { numeric: true }));
+  const hs = [...theoHS.values()].sort((x, y) => y.c - x.c).slice(0, 30);
+  moModal(`<h2>${esc(l.ten || '')}</h2>
+    <p class="muted">${esc(tieuDeKy)}${l.nhom ? ' · ' + esc(l.nhom) : ''} · ${MUC_DO[l.muc_do] || ''}</p>
+    <div class="mini-kpis"><div><b>${a.length}</b><span>vi phạm</span></div><div><b>${theoHS.size}</b><span>học sinh</span></div>
+      <div><b>${theoLop.size}</b><span>lớp</span></div><div><b>${a.filter(r => r.trang_thai !== 'da_xu_ly').length}</b><span>chưa xử lý xong</span></div></div>
+    <h3>Theo lớp</h3><p class="small">${lop.map(([t, n]) => `<span class="tag">${esc(t)} <i>×${n}</i></span>`).join(' ')}</p>
+    ${hs.length ? `<h3>Học sinh vi phạm</h3><div class="table-wrap"><table class="tbl"><thead><tr><th>Học sinh</th><th>Lớp</th><th class="r">Số lần</th></tr></thead>
+      <tbody>${hs.map(o => `<tr><td><a href="#" data-lsu="${o.id}">${esc(o.ten)}</a></td><td>${esc(o.lop)}</td><td class="r">${o.c}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Đóng</button></div>`, true);
+  $('#modal-body').onclick = e => { const t = e.target.closest('[data-lsu]'); if (t) { e.preventDefault(); lichSuHS(+t.dataset.lsu); } };
+}
+
 /* =====================================================================
    3. THỐNG KÊ
    ===================================================================== */
@@ -889,7 +921,8 @@ function veChart(id, cfg) {
 const thoiGianTB = gio => gio < 1 ? `${Math.round(gio * 60)} phút` : gio < 48 ? `${so(gio)} giờ` : `${so(gio / 24)} ngày`;
 
 VIEWS.thongke = async function (el) {
-  const F = S.locTK || (S.locTK = { preset: 'tuan', tu: '', den: '', dt: '', lop: '' });
+  const F = S.locTK || (S.locTK = { preset: 'tuan', tu: '', den: '', dt: '', lop: '', loai: '' });
+  if (F.loai === undefined) F.loai = '';
   if (F.dt && !S.dtMap.has(+F.dt)) F.dt = '';
   el.innerHTML = `
   <section class="card">
@@ -906,6 +939,7 @@ VIEWS.thongke = async function (el) {
       <label>Đến ngày<input type="date" id="tk-den" class="input"></label>
       ${coDT() ? `<label>Điểm trường<select id="tk-dt" class="input"><option value="">Toàn trường</option>${optDT(F.dt)}</select></label>` : ''}
       <label>Lớp<select id="tk-lop" class="input"></select></label>
+      <label class="grow">Loại vi phạm<select id="tk-loai" class="input">${optLoaiTK(F.loai)}</select></label>
     </div>
     <p class="muted small" id="tk-mota"></p>
   </section>
@@ -920,6 +954,9 @@ VIEWS.thongke = async function (el) {
     <section class="card"><h3>Theo mức độ</h3><div class="chart-box sm"><canvas id="c-muc-do"></canvas></div></section>
     <section class="card"><h3>Tình trạng xử lý</h3><div class="chart-box sm"><canvas id="c-xu-ly"></canvas></div></section>
   </div>
+  <section class="card"><div class="head-row"><h3>Thống kê theo loại vi phạm</h3><button type="button" class="btn sm" id="csv-loai">Xuất CSV</button></div>
+    <p class="muted small">Gộp theo nhóm; bấm tên loại vi phạm để xem lớp và học sinh vi phạm loại đó.</p>
+    <div class="table-wrap" id="tk-bang-loai"></div></section>
   <section class="card"><h3>Vi phạm theo thứ trong tuần và buổi</h3><p class="muted small">Giúp nhận ra thời điểm cần tăng cường giám sát.</p><div class="chart-box sm"><canvas id="c-thu"></canvas></div></section>
   <section class="card hidden" id="card-dt"><div class="head-row"><h3>Theo điểm trường</h3></div>
     <div class="chart-box sm"><canvas id="c-dt"></canvas></div><div class="table-wrap" id="tk-bang-dt"></div></section>
@@ -940,7 +977,7 @@ VIEWS.thongke = async function (el) {
     $('#tk-lop').innerHTML = `<option value="">Tất cả lớp</option>${optLop(F.lop, ds)}`;
   };
 
-  let bangLop = [], bangHS = [], dataCur = [], K = {};
+  let bangLop = [], bangHS = [], bangLoai = [], dataCur = [], K = {};
 
   let lanTai = 0;
   async function tai() {
@@ -958,7 +995,8 @@ VIEWS.thongke = async function (el) {
       return;
     }
     const n = diffNgay(tu, den) + 1;
-    const pham = F.lop ? `lớp ${tenLop(+F.lop)}` : F.dt ? `điểm trường ${tenDT(+F.dt)}` : 'toàn trường';
+    F.loai = $('#tk-loai').value;
+    const pham = (F.lop ? `lớp ${tenLop(+F.lop)}` : F.dt ? `điểm trường ${tenDT(+F.dt)}` : 'toàn trường') + (F.loai ? ` · ${moTaLoaiTK(F.loai)}` : '');
     $('#tk-mota').innerHTML = `<b>${nhanA}</b>: ${vn(tu)} – ${vn(den)} (${n} ngày) · so với <b>${nhanB}</b>: ${vn(pTu)} – ${vn(pDen)} · Phạm vi: ${esc(pham)}`;
     $('#tk-kpi').innerHTML = '<p class="muted">Đang tải…</p>';
 
@@ -967,6 +1005,8 @@ VIEWS.thongke = async function (el) {
       let q = sb.from('v_vi_pham').select(cot).gte('thoi_gian', tuNgay(a)).lt('thoi_gian', denNgay(b)).order('id');
       if (F.lop) q = q.eq('lop_id', +F.lop);
       else if (F.dt) q = q.eq('diem_truong_id', +F.dt);
+      if (F.loai.startsWith('n:')) { const nh = F.loai.slice(2); q = nh ? q.eq('nhom', nh) : q.is('nhom', null); }
+      else if (F.loai) q = q.eq('loai_id', +F.loai);
       return q;
     });
     let cur, prev;
@@ -1097,6 +1137,37 @@ VIEWS.thongke = async function (el) {
           <td class="r">${d.hs}</td><td class="r">${d.tt}</td><td class="r">${so(d.diem)}</td><td class="r">${d.p}</td><td>${xuHuong(d.c, d.p)}</td><td class="r">${d.chua || ''}</td></tr>`).join('')}</tbody></table>`;
     }
 
+    // --- Theo loại vi phạm (gộp theo nhóm)
+    const mLoai = new Map();
+    const oLoai = r => {
+      let o = mLoai.get(r.loai_id);
+      if (!o) mLoai.set(r.loai_id, o = { id: r.loai_id, ten: r.ten_vi_pham, nhom: r.nhom || 'Khác', muc_do: +r.muc_do, pham_vi: r.pham_vi, c: 0, p: 0, hs: new Set(), lop: new Map(), diem: 0, xl: 0 });
+      return o;
+    };
+    cur.forEach(r => {
+      const o = oLoai(r); o.c++; o.diem += +r.diem_tru || 0;
+      if (r.hoc_sinh_id) o.hs.add(r.hoc_sinh_id);
+      o.lop.set(r.ten_lop, (o.lop.get(r.ten_lop) || 0) + 1);
+      if (r.trang_thai === 'da_xu_ly') o.xl++;
+    });
+    prev.forEach(r => oLoai(r).p++);
+    bangLoai = [...mLoai.values()].map(o => {
+      const top = [...o.lop].sort((a, b) => b[1] - a[1])[0];
+      return { ...o, soHS: o.hs.size, soLop: o.lop.size, lopMax: top ? `${top[0]} (${top[1]})` : '', tyLe: cur.length ? o.c / cur.length * 100 : 0, xlPct: o.c ? Math.round(o.xl / o.c * 100) : null };
+    });
+    const nhomL = new Map();
+    bangLoai.forEach(o => { if (!nhomL.has(o.nhom)) nhomL.set(o.nhom, []); nhomL.get(o.nhom).push(o); });
+    const dsNhom = [...nhomL].map(([ten, a]) => ({ ten, a: a.sort((x, y) => y.c - x.c || y.p - x.p), c: a.reduce((s, o) => s + o.c, 0), p: a.reduce((s, o) => s + o.p, 0), diem: a.reduce((s, o) => s + o.diem, 0) }))
+      .sort((x, y) => y.c - x.c);
+    bangLoai = dsNhom.flatMap(g => g.a);
+    $('#tk-bang-loai').innerHTML = bangLoai.length ? `<table class="tbl"><thead><tr><th>Loại vi phạm</th><th>Mức độ</th><th>Áp dụng</th><th class="r">Số VP</th><th class="r">Tỷ lệ</th><th class="r">${nhanB}</th><th>Tăng / giảm</th>
+        <th class="r">HS vi phạm</th><th class="r">Số lớp</th><th>Lớp nhiều nhất</th><th class="r">Điểm trừ</th><th class="r">Đã xử lý</th></tr></thead>
+      <tbody>${dsNhom.map(g => `<tr class="dong-nhom"><td colspan="3"><b>${esc(g.ten)}</b></td><td class="r"><b>${g.c}</b></td><td class="r">${cur.length ? so(g.c / cur.length * 100) + '%' : '–'}</td><td class="r">${g.p}</td><td>${xuHuong(g.c, g.p)}</td><td colspan="3"></td><td class="r">${so(g.diem)}</td><td></td></tr>` +
+        g.a.map(o => `<tr><td class="thut"><span class="dot md${o.muc_do}"></span>${o.c ? `<a href="#" data-loai-ct="${o.id}">${esc(o.ten)}</a>` : esc(o.ten)}</td><td class="small">${MUC_DO[o.muc_do] || ''}</td><td class="small">${PHAM_VI[o.pham_vi] || ''}</td>
+          <td class="r"><b>${o.c}</b></td><td class="r">${cur.length ? so(o.tyLe) + '%' : '–'}</td><td class="r">${o.p}</td><td>${xuHuong(o.c, o.p)}</td>
+          <td class="r">${o.soHS || ''}</td><td class="r">${o.soLop || ''}</td><td class="small">${esc(o.lopMax)}</td><td class="r">${so(o.diem)}</td><td class="r">${o.xlPct == null ? '' : o.xlPct + '%'}</td></tr>`).join('')).join('')}</tbody></table>`
+      : '<p class="muted pad">Không có vi phạm trong khoảng thời gian này.</p>';
+
     // --- Theo lớp
     const dsLop = F.lop ? S.lop.filter(l => l.id === +F.lop) : F.dt ? S.lop.filter(l => String(l.diem_truong_id) === String(F.dt)) : S.lop;
     const gc = new Map(), gp = new Map();
@@ -1148,11 +1219,15 @@ VIEWS.thongke = async function (el) {
     const id = e.target.id;
     if (id === 'tk-tu' || id === 'tk-den') $('#tk-preset').value = 'tuy';
     if (id === 'tk-dt') { F.dt = e.target.value; veOptLop(); }
-    if (['tk-preset', 'tk-tu', 'tk-den', 'tk-dt', 'tk-lop'].includes(id)) tai();
+    if (['tk-preset', 'tk-tu', 'tk-den', 'tk-dt', 'tk-lop', 'tk-loai'].includes(id)) tai();
   };
   el.onclick = e => {
-    const t = e.target.closest('[data-lsu],[data-lop-ct],#csv-lop,#csv-hs'); if (!t) return;
+    const t = e.target.closest('[data-lsu],[data-lop-ct],[data-loai-ct],#csv-lop,#csv-hs,#csv-loai'); if (!t) return;
     if (t.dataset.lsu) { e.preventDefault(); lichSuHS(+t.dataset.lsu); }
+    else if (t.dataset.loaiCt) { e.preventDefault(); chiTietLoai(+t.dataset.loaiCt, dataCur, `${K.a}: ${vn(K.tu)} – ${vn(K.den)}`); }
+    else if (t.id === 'csv-loai') xuatCSV(`thong-ke-loai-vi-pham_${F.tu}_${F.den}.csv`,
+      ['Nhóm', 'Loại vi phạm', 'Mức độ', 'Áp dụng cho', 'Số VP', 'Tỷ lệ (%)', K.b, 'Chênh lệch', 'HS vi phạm', 'Số lớp', 'Lớp nhiều nhất', 'Điểm trừ', 'Đã xử lý (%)'],
+      bangLoai.map(o => [o.nhom, o.ten, MUC_DO[o.muc_do], PHAM_VI[o.pham_vi], o.c, +o.tyLe.toFixed(1), o.p, o.c - o.p, o.soHS, o.soLop, o.lopMax, o.diem, o.xlPct ?? '']));
     else if (t.dataset.lopCt) { e.preventDefault(); chiTietLop(+t.dataset.lopCt, dataCur, `${K.a}: ${vn(K.tu)} – ${vn(K.den)}`); }
     else if (t.id === 'csv-lop') xuatCSV(`thong-ke-lop_${F.tu}_${F.den}.csv`,
       ['Lớp', 'Điểm trường', 'GVCN', 'Sĩ số', 'Số VP', 'VP tập thể', 'VP/HS', 'HS vi phạm', 'Điểm trừ', K.b, 'Chênh lệch', 'Chưa xử lý'],

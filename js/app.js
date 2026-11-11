@@ -22,6 +22,8 @@ const BIEN_PHAP_MAC_DINH = ['Nhắc nhở', 'Phê bình trước lớp', 'Viết
 const PHUT_HUY = CFG.PHUT_DUOC_HUY || 15;
 const NGAY_LUI = CFG.SO_NGAY_DUOC_LUI ?? 7;
 const THU = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const MK_TOI_THIEU = 8;   // độ dài tối thiểu cho mật khẩu MỚI (đăng ký, đổi, đặt lại)
+const trangChu = () => location.origin + location.pathname;
 
 /* ---------------- Tiện ích ---------------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -114,6 +116,13 @@ function dichLoi(e) {
   if (/Email not confirmed/i.test(m)) return 'Email chưa được xác nhận. Hãy mở hộp thư và bấm liên kết xác nhận.';
   if (/User already registered/i.test(m)) return 'Email này đã được đăng ký.';
   if (/rate limit/i.test(m)) return 'Gửi quá nhiều yêu cầu. Vui lòng đợi vài phút rồi thử lại.';
+  const cho = m.match(/after (\d+) seconds?/i);
+  if (cho) return `Vui lòng đợi ${cho[1]} giây rồi thử lại.`;
+  if (/should be different from the old password/i.test(m)) return 'Mật khẩu mới phải khác mật khẩu cũ.';
+  if (/Password should be at least/i.test(m)) return 'Mật khẩu quá ngắn.';
+  if (/weak|pwned|known to be/i.test(m)) return 'Mật khẩu quá yếu hoặc quá phổ biến. Hãy chọn mật khẩu khác.';
+  if (/reauthentication|reauthenticate/i.test(m)) return 'Cần đăng nhập lại trước khi đổi mật khẩu.';
+  if (/Auth session missing|session.*expired|JWT expired/i.test(m)) return 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.';
   if (/row-level security|permission denied/i.test(m)) return 'Bạn không có quyền thực hiện thao tác này.';
   if (/foreign key/i.test(m)) return 'Dữ liệu đang được sử dụng ở nơi khác, không thể xóa.';
   if (/duplicate key|unique/i.test(m)) return 'Dữ liệu bị trùng (đã tồn tại).';
@@ -192,6 +201,7 @@ async function khoiDong() {
   const tham = new URLSearchParams(location.hash.slice(1) + '&' + location.search.slice(1));
   const loiLink = tham.get('error_description') || tham.get('error');
   const tuLinkXacNhan = ['signup', 'email', 'invite', 'magiclink'].includes(tham.get('type'));
+  const tuLinkDatLaiMK = tham.get('type') === 'recovery';
 
   sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
     auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true }
@@ -201,19 +211,22 @@ async function khoiDong() {
   $('#ten-truong-login').textContent = CFG.TEN_TRUONG || '';
 
   ganDangNhap();
+  ganDatMK();
   sb.auth.onAuthStateChange(ev => { if (ev === 'SIGNED_OUT') hienDangNhap(); });
   const { data: { session } } = await sb.auth.getSession();
 
-  if (loiLink || tuLinkXacNhan) history.replaceState(null, '', location.pathname);
-  if (session) {
+  if (loiLink || tuLinkXacNhan || tuLinkDatLaiMK) history.replaceState(null, '', location.pathname);
+  if (session && tuLinkDatLaiMK) {
+    hienDatMK(session.user);
+  } else if (session) {
     await vaoApp(session.user);
     if (tuLinkXacNhan) toast('Đã xác nhận email thành công.');
   } else {
     hienDangNhap();
     if (loiLink) {
       $('#login-err').textContent = /expired|invalid|otp/i.test(loiLink)
-        ? 'Liên kết xác nhận đã hết hạn hoặc đã được dùng. Hãy thử đăng nhập; nếu chưa được, đăng ký lại hoặc báo Quản trị viên.'
-        : 'Không xác nhận được email: ' + loiLink;
+        ? 'Liên kết đã hết hạn hoặc đã được dùng. Hãy thử đăng nhập; nếu quên mật khẩu, bấm “Quên mật khẩu?” để nhận liên kết mới.'
+        : 'Không mở được liên kết: ' + loiLink;
     } else if (tuLinkXacNhan) {
       $('#login-ok').textContent = 'Đã xác nhận email. Vui lòng đăng nhập.';
       $('#login-ok').classList.remove('hidden');
@@ -223,20 +236,102 @@ async function khoiDong() {
 
 function hienDangNhap() {
   $('#khung').classList.add('hidden');
+  $('#man-dat-mk').classList.add('hidden');
   $('#man-dang-nhap').classList.remove('hidden');
 }
 
-function ganDangNhap() {
-  let dangKy = false;
-  $('#lnk-dk').onclick = e => {
+/* ---------------- Đặt lại mật khẩu (từ email "Quên mật khẩu") ---------------- */
+function hienDatMK(user) {
+  $('#khung').classList.add('hidden');
+  $('#man-dang-nhap').classList.add('hidden');
+  $('#man-dat-mk').classList.remove('hidden');
+  $('#dat-mk-email').textContent = user?.email || '';
+  $('#dat-mk-err').textContent = '';
+  $('#f-dat-mk').reset();
+  $('#f-dat-mk [name=moi]').focus();
+}
+function ganDatMK() {
+  $('#f-dat-mk').onsubmit = async e => {
     e.preventDefault();
-    dangKy = !dangKy;
-    $('.dk').classList.toggle('hidden', !dangKy);
-    $('#btn-login').textContent = dangKy ? 'Đăng ký' : 'Đăng nhập';
-    e.target.textContent = dangKy ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký';
+    const f = e.target, moi = f.moi.value, lai = f.lai.value;
+    $('#dat-mk-err').textContent = '';
+    if (moi.length < MK_TOI_THIEU) { $('#dat-mk-err').textContent = `Mật khẩu cần ít nhất ${MK_TOI_THIEU} ký tự.`; return; }
+    if (moi !== lai) { $('#dat-mk-err').textContent = 'Hai lần nhập mật khẩu không khớp.'; return; }
+    const btn = $('#btn-dat-mk'); btn.disabled = true;
+    const { data, error } = await sb.auth.updateUser({ password: moi });
+    btn.disabled = false;
+    if (error) { $('#dat-mk-err').textContent = dichLoi(error); return; }
+    $('#man-dat-mk').classList.add('hidden');
+    await vaoApp(data.user);
+    toast('Đã đặt mật khẩu mới.');
+  };
+  $('#lnk-huy-dat-mk').onclick = async e => { e.preventDefault(); await sb.auth.signOut({ scope: 'local' }); hienDangNhap(); };
+}
+
+/* ---------------- Đổi mật khẩu (khi đã đăng nhập) ---------------- */
+function moDoiMK() {
+  moModal(`<h2>Đổi mật khẩu</h2>
+    <p class="muted small">${esc(S.user?.email || '')}</p>
+    <form id="f-doi-mk" autocomplete="off">
+      <input type="email" name="email" value="${esc(S.user?.email || '')}" autocomplete="username" hidden>
+      <label class="lbl">Mật khẩu hiện tại<input class="input" type="password" name="cu" required autocomplete="current-password"></label>
+      <label class="lbl">Mật khẩu mới<input class="input" type="password" name="moi" required minlength="${MK_TOI_THIEU}" autocomplete="new-password"></label>
+      <label class="lbl">Nhập lại mật khẩu mới<input class="input" type="password" name="lai" required minlength="${MK_TOI_THIEU}" autocomplete="new-password"></label>
+      <p class="muted small">Ít nhất ${MK_TOI_THIEU} ký tự, nên có cả chữ và số.</p>
+      <label class="switch"><input type="checkbox" name="khac" checked> Đăng xuất khỏi các thiết bị khác</label>
+      <p class="err small" id="doi-mk-err"></p>
+      <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button><button class="btn primary" id="doi-mk-luu">Đổi mật khẩu</button></div>
+    </form>`);
+  $('#f-doi-mk [name=cu]').focus();
+  $('#f-doi-mk').onsubmit = async e => {
+    e.preventDefault();
+    const f = e.target, err = $('#doi-mk-err');
+    err.textContent = '';
+    if (f.moi.value.length < MK_TOI_THIEU) { err.textContent = `Mật khẩu mới cần ít nhất ${MK_TOI_THIEU} ký tự.`; return; }
+    if (f.moi.value !== f.lai.value) { err.textContent = 'Hai lần nhập mật khẩu mới không khớp.'; return; }
+    if (f.moi.value === f.cu.value) { err.textContent = 'Mật khẩu mới phải khác mật khẩu cũ.'; return; }
+    const btn = $('#doi-mk-luu'); btn.disabled = true; btn.textContent = 'Đang lưu…';
+    try {
+      // Kiểm tra mật khẩu hiện tại bằng một phiên tạm, không ảnh hưởng phiên đang dùng
+      const kt = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'kiem-tra-mat-khau' }
+      });
+      const { error: e1 } = await kt.auth.signInWithPassword({ email: S.user.email, password: f.cu.value });
+      if (e1) throw new Error(/Invalid login credentials/i.test(e1.message) ? 'Mật khẩu hiện tại không đúng.' : dichLoi(e1));
+      await kt.auth.signOut({ scope: 'local' });
+      const { error: e2 } = await sb.auth.updateUser({ password: f.moi.value });
+      if (e2) throw e2;
+      if (f.khac.checked) await sb.auth.signOut({ scope: 'others' });
+      dongModal();
+      toast('Đã đổi mật khẩu.');
+    } catch (ex) {
+      if ($('#doi-mk-err')) { err.textContent = dichLoi(ex); btn.disabled = false; btn.textContent = 'Đổi mật khẩu'; }
+    }
+  };
+}
+
+/** Gửi email chứa liên kết đặt lại mật khẩu (dùng cho Quên mật khẩu và cho Quản trị) */
+const guiLinkDatLaiMK = email => sb.auth.resetPasswordForEmail(email, { redirectTo: trangChu() });
+
+function ganDangNhap() {
+  let cheDo = 'dang_nhap';   // 'dang_nhap' | 'dang_ky' | 'quen'
+  const datCheDo = cd => {
+    cheDo = cd;
+    const f = $('#f-dang-nhap'), pw = f.pw;
+    $('.dk').classList.toggle('hidden', cd !== 'dang_ky');
+    $('#o-mk').classList.toggle('hidden', cd === 'quen');
+    pw.required = cd !== 'quen';
+    pw.minLength = cd === 'dang_ky' ? MK_TOI_THIEU : 6;
+    pw.autocomplete = cd === 'dang_ky' ? 'new-password' : 'current-password';
+    $('#btn-login').textContent = { dang_nhap: 'Đăng nhập', dang_ky: 'Đăng ký', quen: 'Gửi liên kết đặt lại mật khẩu' }[cd];
+    $('#lnk-dk').textContent = cd === 'dang_nhap' ? 'Chưa có tài khoản? Đăng ký' : 'Quay lại đăng nhập';
+    $('#lnk-quen').classList.toggle('hidden', cd !== 'dang_nhap');
     $('#login-err').textContent = '';
     $('#login-ok').classList.add('hidden');
+    (cd === 'dang_ky' ? f.ten : f.email).focus();
   };
+  $('#lnk-dk').onclick = e => { e.preventDefault(); datCheDo(cheDo === 'dang_nhap' ? 'dang_ky' : 'dang_nhap'); };
+  $('#lnk-quen').onclick = e => { e.preventDefault(); datCheDo('quen'); };
   $('#f-dang-nhap').onsubmit = async e => {
     e.preventDefault();
     const f = e.target, email = f.email.value.trim(), password = f.pw.value;
@@ -244,12 +339,20 @@ function ganDangNhap() {
     $('#login-ok').classList.add('hidden');
     $('#btn-login').disabled = true;
     try {
-      if (dangKy) {
+      if (cheDo === 'quen') {
+        const { error } = await guiLinkDatLaiMK(email);
+        if (error) throw error;
+        $('#login-ok').textContent = 'Nếu email này đã đăng ký, một liên kết đặt lại mật khẩu đã được gửi tới. Hãy kiểm tra cả thư mục Spam (Thư rác).';
+        $('#login-ok').classList.remove('hidden');
+        return;
+      }
+      if (cheDo === 'dang_ky') {
+        if (password.length < MK_TOI_THIEU) throw new Error(`Mật khẩu cần ít nhất ${MK_TOI_THIEU} ký tự.`);
         const { data, error } = await sb.auth.signUp({
           email, password,
           options: {
             // Liên kết trong email xác nhận trỏ về đúng trang này (không phải localhost)
-            emailRedirectTo: location.origin + location.pathname,
+            emailRedirectTo: trangChu(),
             data: { ho_ten: chuanHoaTen(f.ten.value || '') }
           }
         });
@@ -271,6 +374,7 @@ function ganDangNhap() {
       $('#btn-login').disabled = false;
     }
   };
+  $('#btn-doi-mk').onclick = moDoiMK;
   $('#btn-dang-xuat').onclick = async () => { await sb.auth.signOut(); history.replaceState(null, '', location.pathname); hienDangNhap(); };
 }
 
@@ -280,6 +384,7 @@ async function vaoApp(user) {
   if (error) { toast(dichLoi(error), 'err'); return; }
   S.profile = data || { vai_tro: 'cho_duyet' };
   $('#man-dang-nhap').classList.add('hidden');
+  $('#man-dat-mk').classList.add('hidden');
   $('#khung').classList.remove('hidden');
   $('#ten-user').innerHTML = `${esc(S.profile.ho_ten || user.email)} <span class="role">${VAI_TRO[S.profile.vai_tro] || ''}</span>`;
 
@@ -1552,7 +1657,7 @@ VIEWS.nguoidung = async function (el) {
       <button type="button" class="btn sm" id="sl-hs">Sao lưu danh sách học sinh (CSV)</button>
     </div>
     <div class="xoa-chon">
-      <label class="radio"><input type="checkbox" id="x-vp" checked> <b>Vi phạm</b></label>
+      <label class="radio"><input type="checkbox" id="x-vp"> <b>Vi phạm</b></label>
       <div class="xoa-con" id="x-vp-con">
         <label class="radio"><input type="radio" name="x-pv" value="het" checked> Tất cả vi phạm</label>
         <label class="radio"><input type="radio" name="x-pv" value="truoc"> Chỉ vi phạm xảy ra trước ngày
@@ -1595,7 +1700,7 @@ VIEWS.nguoidung = async function (el) {
       ${data.map(u => `<tr data-id="${u.id}" class="${u.vai_tro === 'cho_duyet' ? 'cho' : ''}"><td><input class="input sm" name="ho_ten" value="${esc(u.ho_ten || '')}"></td><td class="small">${esc(u.email || '')}</td>
         <td><select class="input sm" name="vai_tro">${Object.entries(VAI_TRO).map(([k, t]) => `<option value="${k}" ${u.vai_tro === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
         <td class="phu-trach">${oPhuTrach(u, u.vai_tro)}</td>
-        <td><button type="button" class="btn sm" data-luu>Lưu</button></td></tr>`).join('')}</tbody></table>`;
+        <td class="nowrap"><button type="button" class="btn sm" data-luu>Lưu</button>${u.email && u.id !== S.user.id ? `<button type="button" class="link" data-dat-lai="${esc(u.email)}" title="Gửi email đặt lại mật khẩu">Gửi link đặt lại MK</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
   };
 
   el.onchange = e => {
@@ -1623,6 +1728,16 @@ VIEWS.nguoidung = async function (el) {
     if (g) { moGanLop(g.dataset.ganLop, tai); return; }
     const gd = e.target.closest('[data-gan-dt]');
     if (gd) { moGanDT(gd.dataset.ganDt, tai); return; }
+    const dl = e.target.closest('[data-dat-lai]');
+    if (dl) {
+      const email = dl.dataset.datLai;
+      if (!confirm(`Gửi email đặt lại mật khẩu tới ${email}?\n\nNgười dùng bấm liên kết trong email để tự đặt mật khẩu mới.`)) return;
+      dl.disabled = true;
+      const { error } = await guiLinkDatLaiMK(email);
+      dl.disabled = false;
+      toast(error ? dichLoi(error) : `Đã gửi liên kết đặt lại mật khẩu tới ${email}.`, error ? 'err' : 'ok');
+      return;
+    }
     const b = e.target.closest('[data-luu]'); if (!b) return;
     const tr = b.closest('tr'), id = tr.dataset.id;
     const vt = tr.querySelector('[name=vai_tro]').value;

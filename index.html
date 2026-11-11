@@ -18,10 +18,25 @@
       <p class="ok-msg center hidden" id="login-ok"></p>
       <label class="dk hidden">Họ và tên<input class="input" name="ten" autocomplete="name"></label>
       <label>Email<input class="input" type="email" name="email" required autocomplete="username"></label>
-      <label>Mật khẩu<input class="input" type="password" name="pw" required minlength="6" autocomplete="current-password"></label>
+      <label id="o-mk">Mật khẩu<input class="input" type="password" name="pw" required minlength="6" autocomplete="current-password"></label>
       <button class="btn primary big" type="submit" id="btn-login">Đăng nhập</button>
-      <p class="small center"><a href="#" id="lnk-dk">Chưa có tài khoản? Đăng ký</a></p>
+      <p class="small center lien-ket"><a href="#" id="lnk-quen">Quên mật khẩu?</a><a href="#" id="lnk-dk">Chưa có tài khoản? Đăng ký</a></p>
       <p class="err center" id="login-err"></p>
+    </form>
+  </section>
+
+  <!-- Đặt mật khẩu mới (mở từ liên kết "Quên mật khẩu" trong email) -->
+  <section id="man-dat-mk" class="login hidden">
+    <form id="f-dat-mk" class="card login-card" autocomplete="off">
+      <div class="logo">🔑</div>
+      <h1>Đặt mật khẩu mới</h1>
+      <p class="muted center small" id="dat-mk-email"></p>
+      <label>Mật khẩu mới<input class="input" type="password" name="moi" required minlength="8" autocomplete="new-password"></label>
+      <label>Nhập lại mật khẩu mới<input class="input" type="password" name="lai" required minlength="8" autocomplete="new-password"></label>
+      <p class="muted small">Ít nhất 8 ký tự, nên có cả chữ và số.</p>
+      <button class="btn primary big" type="submit" id="btn-dat-mk">Lưu mật khẩu mới</button>
+      <p class="small center"><a href="#" id="lnk-huy-dat-mk">Hủy</a></p>
+      <p class="err center" id="dat-mk-err"></p>
     </form>
   </section>
 
@@ -35,6 +50,7 @@
       <nav id="nav"></nav>
       <div class="user">
         <span id="ten-user"></span>
+        <button class="btn sm" id="btn-doi-mk" title="Đổi mật khẩu">Mật khẩu</button>
         <button class="btn sm" id="btn-dang-xuat" title="Đăng xuất">Thoát</button>
       </div>
     </header>

@@ -69,6 +69,14 @@ Phần mềm cũng tự gửi kèm địa chỉ trang hiện tại khi đăng k�
 3. **Hình thức VP**: chỉnh danh mục cho đúng nội quy trường.
 4. Giáo viên tự đăng ký → Quản trị vào **Tài khoản** cấp vai trò, gán lớp chủ nhiệm.
 
+## Mật khẩu
+- **Đổi mật khẩu**: bấm nút **Mật khẩu** trên thanh trên cùng (cần nhập mật khẩu hiện tại; có thể đăng xuất khỏi các thiết bị khác).
+- **Quên mật khẩu**: ở màn hình đăng nhập bấm **Quên mật khẩu?** → nhập email → mở email, bấm liên kết → đặt mật khẩu mới.
+- **Quản trị** có thể bấm **Gửi link đặt lại MK** cạnh tài khoản giáo viên trong mục Tài khoản.
+- Liên kết trong email chỉ hoạt động khi đã làm **Bước 4 – Redirect URLs** ở trên.
+- Dịch vụ email có sẵn của Supabase chỉ gửi được rất ít email mỗi giờ. Nếu nhiều giáo viên cùng cần, nên cấu hình SMTP riêng: Supabase → **Authentication → Emails → SMTP Settings**.
+- Mật khẩu mới cần ít nhất 8 ký tự. Muốn máy chủ cũng bắt buộc như vậy: **Authentication → Sign In / Providers → Email → Minimum password length** = 8.
+
 ## Lưu ý
 - Giáo viên được chọn ngày giờ vi phạm lùi tối đa **7 ngày** (BGH, Quản trị không giới hạn). Đổi con số ở `so_ngay_lui` trong `schema.sql` và `SO_NGAY_DUOC_LUI` trong `js/config.js`.
 - Thời điểm bấm Ghi nhận luôn do máy chủ ghi (`tao_luc`), không sửa được từ trình duyệt.

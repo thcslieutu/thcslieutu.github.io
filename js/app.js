@@ -184,7 +184,20 @@ const MENU = [
 ];
 
 /* ---------------- Khởi động & đăng nhập ---------------- */
+/** Chân trang tác giả: lấy từ config.js; bỏ trống TAC_GIA thì ẩn */
+function veTacGia() {
+  const o = $('#tac-gia'); if (!o) return;
+  const ten = String(CFG.TAC_GIA || '').trim();
+  if (!ten) { o.classList.add('hidden'); return; }
+  const sdt = String(CFG.TAC_GIA_SDT || '').trim(), dv = String(CFG.TAC_GIA_DON_VI || '').trim();
+  o.innerHTML = [`Tác giả: <b>${esc(ten)}</b>`,
+    sdt && `SĐT: <a href="tel:${esc(sdt.replace(/[^\d+]/g, ''))}">${esc(sdt)}</a>`,
+    dv && esc(dv)].filter(Boolean).join(' · ');
+  o.classList.remove('hidden');
+}
+
 async function khoiDong() {
+  veTacGia();
   $('#modal').addEventListener('click', e => {
     if (e.target.id === 'modal' || e.target.closest('[data-dong]')) dongModal();
   });

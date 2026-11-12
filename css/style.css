@@ -176,6 +176,8 @@ em.flat { color: var(--muted); font-weight: 500; }
 .grid2.khong-le { gap: 24px; }
 .chart-box { position: relative; height: 290px; margin-bottom: 12px; }
 .chart-box.sm { height: 230px; }
+.bang-dau { margin: 4px 0 8px; }
+.bang-dau p { margin: 0; flex: 1; min-width: 220px; }
 .chu-y { border-left: 4px solid var(--warn); }
 .chu-y .nhom-ten { margin-top: 0; }
 

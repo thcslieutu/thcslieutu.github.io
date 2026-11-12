@@ -1067,7 +1067,8 @@ VIEWS.thongke = async function (el) {
     <div class="chart-box sm"><canvas id="c-dt"></canvas></div><div class="table-wrap" id="tk-bang-dt"></div></section>
   <section class="card"><div class="head-row"><h3>Theo lớp</h3><button type="button" class="btn sm" id="csv-lop">Xuất CSV</button></div>
     <div class="chart-box" id="box-c-lop"><canvas id="c-lop"></canvas></div>
-    <p class="muted small">Bấm tên lớp để xem chi tiết. “VP / HS” = số vi phạm của học sinh chia cho sĩ số.</p>
+    <div class="head-row bang-dau"><p class="muted small">Xếp theo <b>điểm trừ giảm dần</b>. Bấm tên lớp để xem chi tiết. “VP / HS” = số vi phạm của học sinh chia cho sĩ số.</p>
+      <button type="button" class="btn sm" id="csv-lop-2">Xuất CSV</button></div>
     <div class="table-wrap" id="tk-bang-lop"></div></section>
   <section class="card"><div class="head-row"><h3>Học sinh vi phạm nhiều nhất</h3><button type="button" class="btn sm" id="csv-hs">Xuất CSV</button></div>
     <div class="table-wrap" id="tk-hs"></div></section>
@@ -1283,7 +1284,7 @@ VIEWS.thongke = async function (el) {
       const siSo = S.hs.filter(h => h.lop_id === l.id && h.dang_hoc).length;
       const vpHS = cuaHS(a).length;
       return { id: l.id, ten: l.ten_lop, dt: tenDT(l.diem_truong_id), gvcn: tenND(l.gvcn_id), siSo, c: a.length, vpHS, tt: a.length - vpHS, p: gp.get(l.id) || 0, hs: soHS(a), diem: diem(a), chua: a.filter(r => r.trang_thai !== 'da_xu_ly').length };
-    }).sort((a, b) => b.c - a.c || b.diem - a.diem || a.ten.localeCompare(b.ten, 'vi', { numeric: true }));
+    }).sort((a, b) => b.diem - a.diem || b.c - a.c || a.ten.localeCompare(b.ten, 'vi', { numeric: true }));   // điểm trừ giảm dần
     const coDuLieu = bangLop.filter(r => r.c || r.p);
     $('#box-c-lop').classList.toggle('hidden', !!F.lop || !coDuLieu.length);
     if (!F.lop && coDuLieu.length) {
@@ -1297,7 +1298,7 @@ VIEWS.thongke = async function (el) {
         options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }, plugins: legend }
       });
     }
-    $('#tk-bang-lop').innerHTML = `<table class="tbl"><thead><tr><th>#</th><th>Lớp</th>${coDT() ? '<th>Điểm trường</th>' : ''}<th>GVCN</th><th class="r">Sĩ số</th><th class="r">Số VP</th><th class="r">VP tập thể</th><th class="r">VP / HS</th><th class="r">HS vi phạm</th><th class="r">Điểm trừ</th><th class="r">${nhanB}</th><th>Tăng / giảm</th><th class="r">Chưa xử lý</th></tr></thead>
+    $('#tk-bang-lop').innerHTML = `<table class="tbl"><thead><tr><th>#</th><th>Lớp</th>${coDT() ? '<th>Điểm trường</th>' : ''}<th>GVCN</th><th class="r">Sĩ số</th><th class="r">Số VP</th><th class="r">VP tập thể</th><th class="r">VP / HS</th><th class="r">HS vi phạm</th><th class="r">Điểm trừ ▼</th><th class="r">${nhanB}</th><th>Tăng / giảm</th><th class="r">Chưa xử lý</th></tr></thead>
       <tbody>${bangLop.map((r, i) => `<tr><td>${i + 1}</td><td><a href="#" data-lop-ct="${r.id}"><b>${esc(r.ten)}</b></a></td>${coDT() ? `<td class="small">${esc(r.dt)}</td>` : ''}<td class="small">${esc(r.gvcn)}</td><td class="r">${r.siSo}</td><td class="r"><b>${r.c}</b></td><td class="r">${r.tt || ''}</td>
         <td class="r">${r.siSo ? (r.vpHS / r.siSo).toFixed(2) : '–'}</td><td class="r">${r.hs}</td><td class="r">${so(r.diem)}</td><td class="r">${r.p}</td>
         <td>${xuHuong(r.c, r.p)}</td><td class="r">${r.chua || ''}</td></tr>`).join('') || `<tr><td colspan="13" class="muted">Chưa có lớp.</td></tr>`}</tbody></table>`;
@@ -1327,14 +1328,14 @@ VIEWS.thongke = async function (el) {
     if (['tk-preset', 'tk-tu', 'tk-den', 'tk-dt', 'tk-lop', 'tk-loai'].includes(id)) tai();
   };
   el.onclick = e => {
-    const t = e.target.closest('[data-lsu],[data-lop-ct],[data-loai-ct],#csv-lop,#csv-hs,#csv-loai'); if (!t) return;
+    const t = e.target.closest('[data-lsu],[data-lop-ct],[data-loai-ct],#csv-lop,#csv-lop-2,#csv-hs,#csv-loai'); if (!t) return;
     if (t.dataset.lsu) { e.preventDefault(); lichSuHS(+t.dataset.lsu); }
     else if (t.dataset.loaiCt) { e.preventDefault(); chiTietLoai(+t.dataset.loaiCt, dataCur, `${K.a}: ${vn(K.tu)} – ${vn(K.den)}`); }
     else if (t.id === 'csv-loai') xuatCSV(`thong-ke-loai-vi-pham_${F.tu}_${F.den}.csv`,
       ['Nhóm', 'Loại vi phạm', 'Mức độ', 'Áp dụng cho', 'Số VP', 'Tỷ lệ (%)', K.b, 'Chênh lệch', 'HS vi phạm', 'Số lớp', 'Lớp nhiều nhất', 'Điểm trừ', 'Đã xử lý (%)'],
       bangLoai.map(o => [o.nhom, o.ten, MUC_DO[o.muc_do], PHAM_VI[o.pham_vi], o.c, +o.tyLe.toFixed(1), o.p, o.c - o.p, o.soHS, o.soLop, o.lopMax, o.diem, o.xlPct ?? '']));
     else if (t.dataset.lopCt) { e.preventDefault(); chiTietLop(+t.dataset.lopCt, dataCur, `${K.a}: ${vn(K.tu)} – ${vn(K.den)}`); }
-    else if (t.id === 'csv-lop') xuatCSV(`thong-ke-lop_${F.tu}_${F.den}.csv`,
+    else if (t.id === 'csv-lop' || t.id === 'csv-lop-2') xuatCSV(`thong-ke-lop_${F.tu}_${F.den}.csv`,
       ['Lớp', 'Điểm trường', 'GVCN', 'Sĩ số', 'Số VP', 'VP tập thể', 'VP/HS', 'HS vi phạm', 'Điểm trừ', K.b, 'Chênh lệch', 'Chưa xử lý'],
       bangLop.map(r => [r.ten, r.dt, r.gvcn, r.siSo, r.c, r.tt, r.siSo ? +(r.vpHS / r.siSo).toFixed(2) : '', r.hs, r.diem, r.p, r.c - r.p, r.chua]));
     else if (t.id === 'csv-hs') xuatCSV(`thong-ke-hoc-sinh_${F.tu}_${F.den}.csv`,

@@ -10,8 +10,8 @@ window.APP_CONFIG = {
   TEN_TRUONG: 'Trường THCS Liêu Tú',
 
   // Năm học: ngày bắt đầu học kỳ (tháng-ngày), dùng cho thống kê
-  HK1_BAT_DAU: '09-01',
-  HK2_BAT_DAU: '01-16',
+  HK1_BAT_DAU: '09-07',
+  HK2_BAT_DAU: '01-18',
   NAM_HOC_KET_THUC: '05-31',
 
   // Người ghi được tự hủy vi phạm vừa nhập trong bao nhiêu phút (khớp với schema.sql)
@@ -24,5 +24,5 @@ window.APP_CONFIG = {
   // Thông tin tác giả (hiện ở chân trang trên máy tính)
   TAC_GIA: 'Lâm Hòa Văn',
   TAC_GIA_SDT: '0977.364.202',
-  TAC_GIA_DON_VI: 'Giáo viên Trường THCS Liêu Tú'
+  TAC_GIA_DON_VI: 'Giáo viên Trường THCS Liêu Tú - Xã Liêu Tú'
 };

@@ -1065,7 +1065,7 @@ VIEWS.thongke = async function (el) {
   <section class="card"><h3>Vi phạm theo thứ trong tuần và buổi</h3><p class="muted small">Giúp nhận ra thời điểm cần tăng cường giám sát.</p><div class="chart-box sm"><canvas id="c-thu"></canvas></div></section>
   <section class="card hidden" id="card-dt"><div class="head-row"><h3>Theo điểm trường</h3></div>
     <div class="chart-box sm"><canvas id="c-dt"></canvas></div><div class="table-wrap" id="tk-bang-dt"></div></section>
-  <section class="card"><div class="head-row"><h3>Theo lớp</h3><button type="button" class="btn sm" id="csv-lop">Xuất CSV</button></div>
+  <section class="card"><div class="head-row"><h3>Theo lớp</h3></div>
     <div class="chart-box" id="box-c-lop"><canvas id="c-lop"></canvas></div>
     <div class="head-row bang-dau"><p class="muted small">Xếp theo <b>điểm trừ giảm dần</b>. Bấm tên lớp để xem chi tiết. “VP / HS” = số vi phạm của học sinh chia cho sĩ số.</p>
       <button type="button" class="btn sm" id="csv-lop-2">Xuất CSV</button></div>

@@ -1557,7 +1557,7 @@ VIEWS.loai = function (el) {
   el.innerHTML = `<section class="card">
     <h2>Hình thức vi phạm</h2>
     <p class="muted small"><b>Áp dụng cho</b>: “Học sinh” – ghi cho từng em; “Cả lớp” – vi phạm tập thể, ghi cho lớp.
-    <b>Mức độ</b>: xanh – Nhẹ, cam – Trung bình, đỏ – <b>Nặng (chỉ Ban giám hiệu xử lý)</b>. Điểm trừ dùng cho thống kê.
+    <b>Mức độ</b>: xanh – Nhẹ, cam – Trung bình, đỏ – <b>Nặng (chỉ Ban giám hiệu xử lý)</b>. Điểm trừ dùng cho thống kê; <b>đổi điểm trừ chỉ áp dụng cho vi phạm ghi nhận sau khi đổi</b>, vi phạm đã ghi giữ nguyên điểm cũ.
     Hình thức đã phát sinh vi phạm nên <b>tắt “Đang dùng”</b> thay vì xóa.</p>
     <div class="table-wrap"><table class="tbl edit"><thead><tr><th>Thứ tự</th><th>Tên hình thức vi phạm</th><th>Áp dụng cho</th><th>Nhóm</th><th>Mức độ</th><th>Điểm trừ</th><th>Đang dùng</th><th></th></tr></thead>
     <tbody id="loai-body"></tbody></table></div>

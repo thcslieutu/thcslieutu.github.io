@@ -196,8 +196,28 @@ function veTacGia() {
   o.classList.remove('hidden');
 }
 
+/** Logo trường: lấy từ config.js (LOGO). Ảnh lỗi hoặc để trống thì giữ biểu tượng ✓ mặc định. */
+function apDungLogo() {
+  const url = String(CFG.LOGO || '').trim();
+  if (!url || !/^(https:\/\/|[\w.\-\/]+$)/i.test(url)) return;   // chỉ nhận đường dẫn trong trang hoặc https://
+  const img = new Image();
+  img.onload = () => {
+    $('#favicon')?.setAttribute('href', url);
+    let apple = document.querySelector('link[rel="apple-touch-icon"]');
+    if (!apple) { apple = document.createElement('link'); apple.rel = 'apple-touch-icon'; document.head.appendChild(apple); }
+    apple.href = url;
+    const lg = $('#logo-dang-nhap');
+    if (lg) { lg.textContent = ''; lg.classList.add('co-anh'); const i = new Image(); i.src = url; i.alt = 'Logo'; lg.appendChild(i); }
+    const nho = $('#logo-nho');
+    if (nho) { nho.src = url; nho.classList.remove('hidden'); }
+  };
+  img.onerror = () => console.warn('Không tải được logo:', url, '– kiểm tra lại LOGO trong js/config.js');
+  img.src = url;
+}
+
 async function khoiDong() {
   veTacGia();
+  apDungLogo();
   $('#modal').addEventListener('click', e => {
     if (e.target.id === 'modal' || e.target.closest('[data-dong]')) dongModal();
   });

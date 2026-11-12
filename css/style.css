@@ -91,6 +91,9 @@ label > .input { margin-top: 3px; color: var(--text); }
 .login-card { width: 100%; max-width: 380px; padding: 28px; display: flex; flex-direction: column; gap: 12px; }
 .lien-ket { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0; }
 .lien-ket a.hidden + a, .lien-ket a:only-child { margin: 0 auto; }
+.logo.co-anh { width: 72px; height: 72px; background: none; }
+.logo.co-anh img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.logo-nho { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; flex: none; }
 .logo { width: 48px; height: 48px; margin: 0 auto; border-radius: 14px; background: var(--pri); color: #fff; display: grid; place-items: center; font-size: 24px; font-weight: 700; }
 
 /* ---------- Nhập vi phạm ---------- */

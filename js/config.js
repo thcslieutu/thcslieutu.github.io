@@ -8,6 +8,7 @@ window.APP_CONFIG = {
   SUPABASE_URL: 'https://axodppkfmjjpxmsqafvf.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_enbD2CQEpPYrnTs0dXuEKA_d-P66sJH',
   TEN_TRUONG: 'Trường THCS Liêu Tú',
+  LOGO: 'img/logo.png',
 
   // Năm học: ngày bắt đầu học kỳ (tháng-ngày), dùng cho thống kê
   HK1_BAT_DAU: '09-07',

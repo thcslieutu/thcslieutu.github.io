@@ -183,6 +183,20 @@ em.flat { color: var(--muted); font-weight: 500; }
 .bang-dau { margin: 4px 0 8px; }
 .bang-dau p { margin: 0; flex: 1; min-width: 220px; }
 .the-tk { margin-bottom: 12px; }
+/* Bộ lọc chọn nhiều loại vi phạm */
+.loc-loai { position: relative; flex: 1; min-width: 220px; font-size: 13px; color: var(--muted); }
+.chon-nhieu { margin-top: 3px; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; color: var(--text); }
+.chon-nhieu #tk-loai-nhan { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chon-nhieu .mui { color: var(--muted); flex: none; }
+.bang-chon { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 35; background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(16, 32, 48, .15); padding: 10px; color: var(--text); }
+.bang-chon-dau { display: flex; gap: 6px; }
+.bang-chon-dau .input { flex: 1; }
+.bang-chon-gc { margin: 6px 2px; }
+.bang-chon-ds { max-height: 340px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 16px; }
+.chon-nhom { display: flex; flex-direction: column; gap: 3px; padding: 4px 2px; }
+.chon-nhom-dau { margin-bottom: 2px; }
+.chon-muc { padding-left: 22px; font-size: 13.5px; }
 .filters-con { display: contents; }
 .filters-con.hidden { display: none !important; }
 .chu-do { color: var(--err); }
@@ -264,6 +278,7 @@ em.flat { color: var(--muted); font-weight: 500; }
   .tac-gia { display: none; }   /* thông tin tác giả chỉ hiện trên máy tính */
 }
 /* ---------- Chụp ảnh & In ---------- */
+@media (max-width: 1440px) { .nhan-nut { display: none; } }
 .chi-in { display: none; }
 .dau-anh { font-size: 13px; color: var(--muted); padding: 2px 2px 12px; }
 

@@ -1169,15 +1169,42 @@ function chiTietLop(lopId, ds, tieuDeKy) {
   $('#modal-body').onclick = e => { const t = e.target.closest('[data-lsu]'); if (t) { e.preventDefault(); lichSuHS(+t.dataset.lsu); } };
 }
 
-/** Bộ lọc loại vi phạm trong Thống kê: cả nhóm ("n:<tên nhóm>") hoặc từng loại (id) */
-function optLoaiTK(sel) {
+/* ---------- Bộ lọc nhiều loại vi phạm (Thống kê) ---------- */
+/** Các loại vi phạm theo nhóm: [[tên nhóm, [loại…]], …] */
+function nhomLoai() {
   const nhom = new Map();
-  [...S.loai].sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0)).forEach(l => { const k = l.nhom || ''; if (!nhom.has(k)) nhom.set(k, []); nhom.get(k).push(l); });
-  const o = (v, t) => `<option value="${esc(v)}" ${String(sel) === String(v) ? 'selected' : ''}>${t}</option>`;
-  return o('', 'Tất cả loại vi phạm') + [...nhom].map(([k, a]) =>
-    `<optgroup label="${esc(k || 'Khác')}">${o('n:' + k, `— Cả nhóm ${esc(k || 'Khác')} —`)}${a.map(l => o(l.id, esc(l.ten) + (l.dang_dung ? '' : ' (đã tắt)'))).join('')}</optgroup>`).join('');
+  [...S.loai].sort((a, b) => (a.thu_tu || 0) - (b.thu_tu || 0)).forEach(l => { const k = l.nhom || 'Khác'; if (!nhom.has(k)) nhom.set(k, []); nhom.get(k).push(l); });
+  return [...nhom];
 }
-const moTaLoaiTK = v => v.startsWith('n:') ? `nhóm ${v.slice(2) || 'Khác'}` : (S.loai.find(l => l.id === +v)?.ten || '');
+/** Mô tả các loại đã chọn: "Tất cả loại vi phạm" / "nhóm Nề nếp" / "Đi học trễ, Vắng không phép và 2 loại khác" */
+function moTaLoaiChon(ids) {
+  if (!ids.length) return 'Tất cả loại vi phạm';
+  const chon = new Set(ids), phan = [];
+  let le = [];
+  for (const [k, a] of nhomLoai()) {
+    const trong = a.filter(l => chon.has(l.id));
+    if (trong.length && trong.length === a.length && a.length > 1) phan.push(`cả nhóm ${k}`);
+    else le = le.concat(trong.map(l => l.ten));
+  }
+  const tatCa = phan.concat(le);
+  return tatCa.length <= 3 ? tatCa.join(', ') : `${tatCa.slice(0, 2).join(', ')} và ${tatCa.length - 2} mục khác`;
+}
+/** Bảng tick chọn nhiều loại vi phạm, chia theo nhóm */
+function bangChonLoai(ids) {
+  const chon = new Set(ids);
+  return nhomLoai().map(([k, a]) => {
+    const n = a.filter(l => chon.has(l.id)).length;
+    return `<div class="chon-nhom" data-nhom-wrap>
+      <label class="radio chon-nhom-dau"><input type="checkbox" data-loai-nhom="${esc(k)}" ${n === a.length ? 'checked' : ''} ${n && n < a.length ? 'data-mot-phan="1"' : ''}> <b>${esc(k)}</b> <span class="muted small">(${a.length})</span></label>
+      ${a.map(l => `<label class="radio chon-muc" data-ten="${esc(boDau(l.ten))}"><input type="checkbox" data-loai-id="${l.id}" data-nhom="${esc(k)}" ${chon.has(l.id) ? 'checked' : ''}> ${esc(l.ten)}${l.dang_dung ? '' : ' <span class="muted small">(đã tắt)</span>'}</label>`).join('')}
+    </div>`;
+  }).join('') || '<p class="muted small">Chưa có hình thức vi phạm.</p>';
+}
+/* Đóng bảng chọn khi bấm ra ngoài (gắn một lần) */
+document.addEventListener('mousedown', e => {
+  const b = document.querySelector('.bang-chon:not(.hidden)');
+  if (b && !e.target.closest('.loc-loai')) { b.classList.add('hidden'); b.dispatchEvent(new Event('dong')); }
+});
 
 /** Chi tiết một loại vi phạm trong khoảng thời gian đang thống kê */
 function chiTietLoai(loaiId, ds, tieuDeKy) {
@@ -1265,7 +1292,13 @@ const thoiGianTB = gio => gio < 1 ? `${Math.round(gio * 60)} phút` : gio < 48 ?
 VIEWS.thongke = async function (el) {
   if (S.tkTab === 'cc') return veChuyenCan(el);
   const F = S.locTK || (S.locTK = { preset: 'tuan', tu: '', den: '', dt: '', lop: '', loai: '' });
-  if (F.loai === undefined) F.loai = '';
+  // Chuyển bộ lọc cũ (một loại / một nhóm) sang danh sách nhiều loại
+  if (!Array.isArray(F.loaiDs)) {
+    const cu = F.loai || '';
+    F.loaiDs = cu.startsWith('n:') ? S.loai.filter(l => (l.nhom || 'Khác') === (cu.slice(2) || 'Khác')).map(l => l.id) : cu ? [+cu] : [];
+    delete F.loai;
+  }
+  F.loaiDs = F.loaiDs.filter(id => S.loai.some(l => l.id === id));
   if (F.dt && !S.dtMap.has(+F.dt)) F.dt = '';
   el.innerHTML = `
   <section class="card">${theTK('vp')}
@@ -1282,7 +1315,18 @@ VIEWS.thongke = async function (el) {
       <label>Đến ngày<input type="date" id="tk-den" class="input"></label>
       ${coDT() ? `<label>Điểm trường<select id="tk-dt" class="input"><option value="">Toàn trường</option>${optDT(F.dt)}</select></label>` : ''}
       <label>Lớp<select id="tk-lop" class="input"></select></label>
-      <label class="grow">Loại vi phạm<select id="tk-loai" class="input">${optLoaiTK(F.loai)}</select></label>
+      <div class="grow loc-loai"><span>Loại vi phạm</span>
+        <button type="button" class="input chon-nhieu" id="tk-loai-nut" aria-haspopup="true"><span id="tk-loai-nhan">${esc(moTaLoaiChon(F.loaiDs))}</span><span class="mui">▾</span></button>
+        <div class="bang-chon hidden" id="tk-loai-bang">
+          <div class="bang-chon-dau">
+            <input class="input sm" id="tk-loai-tim" placeholder="Tìm loại vi phạm…" autocomplete="off">
+            <button type="button" class="btn sm" id="tk-loai-bo">Bỏ chọn hết</button>
+            <button type="button" class="btn sm primary" id="tk-loai-xong">Xong</button>
+          </div>
+          <p class="muted small bang-chon-gc">Không tick gì = tất cả loại vi phạm. Tick tên nhóm để chọn cả nhóm.</p>
+          <div class="bang-chon-ds" id="tk-loai-ds">${bangChonLoai(F.loaiDs)}</div>
+        </div>
+      </div>
     </div>
     <p class="muted small" id="tk-mota"></p>
   </section>
@@ -1339,8 +1383,7 @@ VIEWS.thongke = async function (el) {
       return;
     }
     const n = diffNgay(tu, den) + 1;
-    F.loai = $('#tk-loai').value;
-    const pham = (F.lop ? `lớp ${tenLop(+F.lop)}` : F.dt ? `điểm trường ${tenDT(+F.dt)}` : 'toàn trường') + (F.loai ? ` · ${moTaLoaiTK(F.loai)}` : '');
+    const pham = (F.lop ? `lớp ${tenLop(+F.lop)}` : F.dt ? `điểm trường ${tenDT(+F.dt)}` : 'toàn trường') + (F.loaiDs.length ? ` · ${moTaLoaiChon(F.loaiDs)}` : '');
     $('#tk-mota').innerHTML = `<b>${nhanA}</b>: ${vn(tu)} – ${vn(den)} (${n} ngày) · so với <b>${nhanB}</b>: ${vn(pTu)} – ${vn(pDen)} · Phạm vi: ${esc(pham)}`;
     $('#tk-kpi').innerHTML = '<p class="muted">Đang tải…</p>';
 
@@ -1349,8 +1392,7 @@ VIEWS.thongke = async function (el) {
       let q = sb.from('v_vi_pham').select(cot).gte('thoi_gian', tuNgay(a)).lt('thoi_gian', denNgay(b)).order('id');
       if (F.lop) q = q.eq('lop_id', +F.lop);
       else if (F.dt) q = q.eq('diem_truong_id', +F.dt);
-      if (F.loai.startsWith('n:')) { const nh = F.loai.slice(2); q = nh ? q.eq('nhom', nh) : q.is('nhom', null); }
-      else if (F.loai) q = q.eq('loai_id', +F.loai);
+      if (F.loaiDs.length) q = q.in('loai_id', F.loaiDs);
       return q;
     });
     let cur, prev;
@@ -1563,11 +1605,44 @@ VIEWS.thongke = async function (el) {
     const id = e.target.id;
     if (id === 'tk-tu' || id === 'tk-den') $('#tk-preset').value = 'tuy';
     if (id === 'tk-dt') { F.dt = e.target.value; veOptLop(); }
-    if (['tk-preset', 'tk-tu', 'tk-den', 'tk-dt', 'tk-lop', 'tk-loai'].includes(id)) tai();
+    if (['tk-preset', 'tk-tu', 'tk-den', 'tk-dt', 'tk-lop'].includes(id)) tai();
+    // Tick loại / nhóm vi phạm
+    const d = e.target.dataset;
+    if (d.loaiNhom !== undefined) $$(`[data-loai-id][data-nhom="${CSS.escape(d.loaiNhom)}"]`).forEach(c => (c.checked = e.target.checked));
+    if (d.loaiNhom !== undefined || d.loaiId) capNhatLoai();
+  };
+  // Cập nhật danh sách loại đã chọn; tải lại thống kê sau khi ngừng tick một chút
+  let henTai = null;
+  const dongBoNhom = () => $$('[data-loai-nhom]').forEach(g => {
+    const con = $$(`[data-loai-id][data-nhom="${CSS.escape(g.dataset.loaiNhom)}"]`), n = con.filter(c => c.checked).length;
+    g.checked = n > 0 && n === con.length; g.indeterminate = n > 0 && n < con.length;
+  });
+  const capNhatLoai = () => {
+    F.loaiDs = $$('[data-loai-id]:checked').map(c => +c.dataset.loaiId);
+    dongBoNhom();
+    $('#tk-loai-nhan').textContent = moTaLoaiChon(F.loaiDs);
+    clearTimeout(henTai); henTai = setTimeout(tai, 600);
+  };
+  dongBoNhom();
+  const moDongBang = mo => {
+    const b = $('#tk-loai-bang'); b.classList.toggle('hidden', !mo);
+    if (mo) { $('#tk-loai-tim').value = ''; $$('.chon-muc, .chon-nhom').forEach(x => (x.style.display = '')); $('#tk-loai-tim').focus(); }
+  };
+  el.oninput = e => {
+    if (e.target.id !== 'tk-loai-tim') return;
+    const q = boDau(e.target.value.trim());
+    $$('.chon-nhom').forEach(g => {
+      let co = 0;
+      $$('.chon-muc', g).forEach(m => { const hien = !q || m.dataset.ten.includes(q); m.style.display = hien ? '' : 'none'; co += hien; });
+      g.style.display = co ? '' : 'none';
+    });
   };
   el.onclick = e => {
     const tab = e.target.closest('[data-tab-tk]');
     if (tab) { S.tkTab = tab.dataset.tabTk; dieuHuong(); return; }
+    if (e.target.closest('#tk-loai-nut')) { moDongBang($('#tk-loai-bang').classList.contains('hidden')); return; }
+    if (e.target.closest('#tk-loai-xong')) { moDongBang(false); return; }
+    if (e.target.closest('#tk-loai-bo')) { $$('[data-loai-id]').forEach(c => (c.checked = false)); capNhatLoai(); return; }
     const t = e.target.closest('[data-lsu],[data-lop-ct],[data-loai-ct],#csv-lop,#csv-lop-2,#csv-hs,#csv-loai'); if (!t) return;
     if (t.dataset.lsu) { e.preventDefault(); lichSuHS(+t.dataset.lsu); }
     else if (t.dataset.loaiCt) { e.preventDefault(); chiTietLoai(+t.dataset.loaiCt, dataCur, `${K.a}: ${vn(K.tu)} – ${vn(K.den)}`); }

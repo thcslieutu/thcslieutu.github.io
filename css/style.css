@@ -171,6 +171,7 @@ label > .input { margin-top: 3px; color: var(--text); }
 .kpi span { color: var(--muted); font-size: 13px; }
 .kpi b { font-size: 28px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .kpi small { color: var(--muted); font-size: 12px; }
+.kpi b .kpi-phu { font-size: 16px; font-weight: 500; color: var(--muted); }
 em.up, em.down, em.flat { font-style: normal; font-size: 13px; font-weight: 600; white-space: nowrap; }
 em.up { color: var(--err); }      /* vi phạm tăng = xấu */
 em.down { color: var(--ok); }
@@ -202,6 +203,8 @@ em.flat { color: var(--muted); font-weight: 500; }
 .chu-do { color: var(--err); }
 .tbl tr.dong-tong td { background: #f6f8fa; border-top: 2px solid var(--line); }
 .tbl tr.dong-canh-bao td { background: #fff8f3; }
+.tbl tr.dong-nghi td { background: #f6f7f8; color: var(--muted); }
+.tag-nghi { display: inline-block; border-radius: 6px; padding: 1px 8px; font-size: 12.5px; font-weight: 600; background: #e9ecef; color: #5c6670; }
 .tag-cc { display: inline-block; border-radius: 6px; padding: 1px 7px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .tag-co_phep { background: var(--ok-bg); color: var(--ok); }
 .tag-khong_phep { background: var(--err-bg); color: var(--err); }

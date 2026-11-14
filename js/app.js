@@ -1721,7 +1721,9 @@ async function veChuyenCan(el) {
   </section>
   <div class="kpis" id="cc-kpi"></div>
   <section class="card hidden" id="cc-card-dt"><div class="head-row"><h3>Theo điểm trường</h3></div><div class="table-wrap" id="cc-bang-dt"></div></section>
-  <section class="card"><div class="head-row"><h3 id="cc-td-lop">Theo lớp</h3><button type="button" class="btn sm" id="cc-csv-lop">Xuất CSV</button></div>
+  <section class="card"><div class="head-row"><h3 id="cc-td-lop">Theo lớp</h3>
+    <div class="row-gap"><span class="row-gap hidden" id="cc-nghi-nut"><button type="button" class="btn sm" id="cc-nghi-het">Tất cả lớp nghỉ buổi này</button><button type="button" class="btn sm" id="cc-nghi-bo">Bỏ đánh dấu nghỉ</button></span>
+    <button type="button" class="btn sm" id="cc-csv-lop">Xuất CSV</button></div></div>
     <p class="muted small" id="cc-gc-lop"></p><div class="table-wrap" id="cc-bang-lop"></div></section>
   <section class="card hidden" id="cc-card-bd"><h3>Diễn biến theo ngày</h3><div class="chart-box"><canvas id="c-cc"></canvas></div></section>
   <section class="card"><div class="head-row"><h3 id="cc-td-hs">Học sinh vắng</h3><button type="button" class="btn sm" id="cc-csv-hs">Xuất CSV</button></div>
@@ -1740,6 +1742,24 @@ async function veChuyenCan(el) {
     return q;
   }).then(a => a.filter(r => r.hoc_sinh_id).map(r => ({ ...r, cc: loaiCC.get(r.loai_id), ngay: ngayVN(r.thoi_gian), buoi: buoiCC(r.thoi_gian) })));
 
+  /* Lớp nghỉ theo buổi (bảng lop_nghi) */
+  let coBangNghi = true;
+  const layNghi = async ngay => {
+    const { data, error } = await sb.from('lop_nghi').select('lop_id').eq('ngay', ngay).eq('buoi', F.buoi);
+    if (error) { coBangNghi = false; return new Set(); }
+    return new Set(data.map(r => r.lop_id));
+  };
+  const coTheDanhNghi = l => laBGH() || (vaiTro() === 'tpt' && (!dtCuaTPT(S.user.id).length || dtCuaTPT(S.user.id).includes(l.diem_truong_id)));
+  const danhNghi = async (ids, nghi) => {
+    ids = ids.filter(id => coTheDanhNghi(S.lopMap.get(id)));
+    if (!ids.length) return;
+    const r = nghi
+      ? await sb.from('lop_nghi').upsert(ids.map(id => ({ ngay: F.ngay, buoi: F.buoi, lop_id: id })), { onConflict: 'ngay,buoi,lop_id', ignoreDuplicates: true })
+      : await sb.from('lop_nghi').delete().eq('ngay', F.ngay).eq('buoi', F.buoi).in('lop_id', ids);
+    if (r.error) toast(dichLoi(r.error), 'err');
+    else if (ids.length > 1) toast(nghi ? `Đã đánh dấu ${ids.length} lớp nghỉ buổi ${tenBuoi(F.buoi)} ${vn(F.ngay)}.` : 'Đã bỏ đánh dấu lớp nghỉ.');
+    await taiBuoi();
+  };
   const dsLop = () => (F.dt ? S.lop.filter(l => String(l.diem_truong_id) === String(F.dt)) : S.lop);
   const siSoLop = id => S.hs.filter(h => h.lop_id === id && h.dang_hoc).length;
   let xuatLop = null, xuatHS = null, lanTai = 0;
@@ -1754,7 +1774,8 @@ async function veChuyenCan(el) {
     }
     return m;
   }
-  function soLieuLop(o, siSo) {
+  function soLieuLop(o, siSo, nghi = false) {
+    if (nghi) return { nghi: true, siSo: 0, cp: 0, kp: 0, ct: 0, vang: 0, coMat: 0, tyLe: null, coVP: !!o };   // lớp nghỉ: không tính
     const cp = o ? o.cp.size : 0, kp = o ? [...o.kp].filter(h => !o.cp.has(h)).length : 0, ct = o ? o.ct.size : 0;
     const vang = cp + kp, coMat = Math.max(0, siSo - vang);
     return { siSo, cp, kp, ct, vang, coMat, tyLe: pct(coMat, siSo) };
@@ -1767,8 +1788,8 @@ async function veChuyenCan(el) {
     const nhanSS = F.ss === 'tuan' ? 'Tuần trước' : F.ss === 'thang' ? 'Tháng trước' : 'Buổi trước';
     $('#cc-mota').innerHTML = `Buổi <b>${tenBuoi(F.buoi)} ${thuNgay(ngay)}</b> · so với buổi ${tenBuoi(F.buoi)} ${thuNgay(ngaySS)} (${nhanSS.toLowerCase()})`;
     $('#cc-kpi').innerHTML = '<p class="muted">Đang tải…</p>';
-    let cur, prev;
-    try { [cur, prev] = await Promise.all([lay(ngay, ngay), lay(ngaySS, ngaySS)]); }
+    let cur, prev, nghi, nghiP;
+    try { [cur, prev, nghi, nghiP] = await Promise.all([lay(ngay, ngay), lay(ngaySS, ngaySS), layNghi(ngay), layNghi(ngaySS)]); }
     catch (e) { if (lan === lanTai && conSong()) $('#cc-kpi').innerHTML = `<p class="err">${esc(dichLoi(e))}</p>`; return; }
     if (lan !== lanTai || !conSong()) return;
     cur = cur.filter(r => r.buoi === F.buoi); prev = prev.filter(r => r.buoi === F.buoi);
@@ -1776,14 +1797,18 @@ async function veChuyenCan(el) {
 
     const lops = dsLop().map(l => {
       const ss = siSoLop(l.id);
-      return { l, c: soLieuLop(mc.get(l.id), ss), p: soLieuLop(mp.get(l.id), ss) };
+      return { l, c: soLieuLop(mc.get(l.id), ss, nghi.has(l.id)), p: soLieuLop(mp.get(l.id), ss, nghiP.has(l.id)) };
     });
+    const soNghi = lops.filter(x => x.c.nghi).length;
+    const nghiCoVP = lops.filter(x => x.c.nghi && x.c.coVP).map(x => x.l.ten_lop);
+    // Ở chế độ đánh dấu, bỏ qua học sinh của lớp nghỉ trong danh sách vắng
+    cur = cur.filter(r => !nghi.has(r.lop_id));
     const tong = lops.reduce((a, x) => cong(a, x.c), {}), tongP = lops.reduce((a, x) => cong(a, x.p), {});
 
     const kpi = (ten, c, p, phu = '', laTyLe = false, tot = false) => `<div class="kpi"><span>${ten}</span><b>${laTyLe ? fmtPct(c) : so(c)}</b>${laTyLe ? xuHuongPct(c, p) : tot ? xuHuongTot(c, p) : xuHuong(c, p)}<small>${nhanSS}: ${laTyLe ? fmtPct(p) : so(p)}${phu}</small></div>`;
     $('#cc-kpi').innerHTML =
-      `<div class="kpi"><span>Sĩ số</span><b>${so(tong.siSo || 0)}</b><small>${lops.length} lớp</small></div>` +
-      kpi('Có mặt', tong.coMat || 0, tongP.coMat || 0, '', false, true) +
+      `<div class="kpi"><span>Sĩ số</span><b>${so(tong.siSo || 0)}</b><small>${lops.length - soNghi} lớp học${soNghi ? ` · ${soNghi} lớp nghỉ` : ''}</small></div>` +
+      `<div class="kpi"><span>Có mặt</span><b>${so(tong.coMat || 0)}<small class="kpi-phu"> / ${so(tong.siSo || 0)}</small></b><small>${nhanSS}: ${so(tongP.coMat || 0)} / ${so(tongP.siSo || 0)}</small></div>` +
       kpi('Tỷ lệ chuyên cần', tong.tyLe, tongP.tyLe, '', true) +
       kpi('Nghỉ có phép', tong.cp || 0, tongP.cp || 0) +
       kpi('Nghỉ không phép', tong.kp || 0, tongP.kp || 0) +
@@ -1798,22 +1823,33 @@ async function veChuyenCan(el) {
     if (hienDT) {
       const nhom = [...S.dt.map(d => [d.id, d.ten]), [null, 'Chưa xếp điểm trường']].map(([id, ten]) => {
         const a = lops.filter(x => (x.l.diem_truong_id ?? null) === id);
-        return { ten, n: a.length, c: a.reduce((s, x) => cong(s, x.c), {}), p: a.reduce((s, x) => cong(s, x.p), {}) };
-      }).filter(g => g.n);
-      $('#cc-bang-dt').innerHTML = `<table class="tbl">${dauBang('<th>Điểm trường</th><th class="r">Số lớp</th>')}<tbody>
-        ${nhom.map(g => `<tr><td><b>${esc(g.ten)}</b></td><td class="r">${g.n}</td>${dongSo(g.ten, g.c, g.p)}</tr>`).join('')}
-        <tr class="dong-tong"><td><b>Toàn trường</b></td><td class="r">${lops.length}</td>${dongSo('', tong, tongP)}</tr></tbody></table>`;
+        return { ten, n: a.filter(x => !x.c.nghi).length, nghi: a.filter(x => x.c.nghi).length, c: a.reduce((s, x) => cong(s, x.c), {}), p: a.reduce((s, x) => cong(s, x.p), {}) };
+      }).filter(g => g.n + g.nghi);
+      const oSoLop = (n, ng) => `<td class="r">${n}${ng ? ` <span class="muted small">(+${ng} nghỉ)</span>` : ''}</td>`;
+      $('#cc-bang-dt').innerHTML = `<table class="tbl">${dauBang('<th>Điểm trường</th><th class="r">Số lớp học</th>')}<tbody>
+        ${nhom.map(g => `<tr><td><b>${esc(g.ten)}</b></td>${oSoLop(g.n, g.nghi)}${g.n ? dongSo(g.ten, g.c, g.p) : '<td colspan="8" class="muted">Cả điểm trường nghỉ buổi này</td>'}</tr>`).join('')}
+        <tr class="dong-tong"><td><b>Toàn trường</b></td>${oSoLop(lops.length - soNghi, soNghi)}${dongSo('', tong, tongP)}</tr></tbody></table>`;
     }
 
     // Theo lớp
     $('#cc-td-lop').textContent = `Theo lớp – buổi ${tenBuoi(F.buoi)} ${vn(ngay)}`;
-    $('#cc-gc-lop').innerHTML = 'Lớp có học sinh nghỉ không phép hoặc cúp tiết được tô màu. Cúp tiết: học sinh vẫn tính là có mặt.';
-    $('#cc-bang-lop').innerHTML = lops.length ? `<table class="tbl">${dauBang(`<th>Lớp</th>${coDT() ? '<th>Điểm trường</th>' : ''}`)}<tbody>
-      ${lops.map(x => `<tr class="${x.c.kp || x.c.ct ? 'dong-canh-bao' : ''}"><td><b>${esc(x.l.ten_lop)}</b></td>${coDT() ? `<td class="small">${esc(tenDT(x.l.diem_truong_id))}</td>` : ''}${dongSo(x.l.ten_lop, x.c, x.p)}</tr>`).join('')}
-      <tr class="dong-tong"><td><b>Tổng</b></td>${coDT() ? '<td></td>' : ''}${dongSo('', tong, tongP)}</tr></tbody></table>` : '<p class="muted pad">Chưa có lớp.</p>';
+    const duocDanh = lops.some(x => coTheDanhNghi(x.l));
+    $('#cc-gc-lop').innerHTML = (coBangNghi
+        ? `${duocDanh ? '<b>Tick ô “Nghỉ”</b> cho lớp không học buổi này (lưu ngay, mọi người cùng thấy) – lớp nghỉ không tính vào thống kê. ' : 'Cột “Nghỉ”: lớp không học buổi này (BGH / Tổng phụ trách đánh dấu). '}`
+        : '<span class="err">Chưa chạy file cap-nhat-lop-nghi.sql nên chưa đánh dấu được lớp nghỉ. </span>')
+      + 'Lớp có học sinh nghỉ không phép hoặc cúp tiết được tô màu. Cúp tiết: học sinh vẫn tính là có mặt.'
+      + (nghiCoVP.length ? `<br><span class="chu-do">⚠ Lớp ${esc(nghiCoVP.join(', '))} được đánh dấu nghỉ nhưng buổi này vẫn có vi phạm chuyên cần được ghi – kiểm tra lại.</span>` : '');
+    $('#cc-nghi-nut').classList.toggle('hidden', !(coBangNghi && duocDanh));
+    const oNghi = x => coBangNghi ? `<td class="c"><input type="checkbox" data-lop-nghi="${x.l.id}" ${x.c.nghi ? 'checked' : ''} ${coTheDanhNghi(x.l) ? '' : 'disabled'} aria-label="Lớp ${esc(x.l.ten_lop)} nghỉ buổi này"></td>` : '';
+    $('#cc-bang-lop').innerHTML = lops.length ? `<table class="tbl">${dauBang(`${coBangNghi ? '<th class="c">Nghỉ</th>' : ''}<th>Lớp</th>${coDT() ? '<th>Điểm trường</th>' : ''}`)}<tbody>
+      ${lops.map(x => x.c.nghi
+        ? `<tr class="dong-nghi">${oNghi(x)}<td><b>${esc(x.l.ten_lop)}</b></td>${coDT() ? `<td class="small">${esc(tenDT(x.l.diem_truong_id))}</td>` : ''}<td colspan="8"><span class="tag-nghi">Lớp nghỉ</span>${x.c.coVP ? ' <span class="chu-do small">⚠ vẫn có vi phạm chuyên cần</span>' : ''}</td></tr>`
+        : `<tr class="${x.c.kp || x.c.ct ? 'dong-canh-bao' : ''}">${oNghi(x)}<td><b>${esc(x.l.ten_lop)}</b></td>${coDT() ? `<td class="small">${esc(tenDT(x.l.diem_truong_id))}</td>` : ''}${dongSo(x.l.ten_lop, x.c, x.p)}</tr>`).join('')}
+      <tr class="dong-tong">${coBangNghi ? '<td></td>' : ''}<td><b>Tổng</b></td>${coDT() ? '<td></td>' : ''}${dongSo('', tong, tongP)}</tr></tbody></table>` : '<p class="muted pad">Chưa có lớp.</p>';
     xuatLop = () => xuatCSV(`chuyen-can_${F.buoi}_${ngay}.csv`,
       ['Lớp', 'Điểm trường', 'Sĩ số', 'Có mặt', 'Nghỉ có phép', 'Nghỉ không phép', 'Cúp tiết', 'Tỷ lệ chuyên cần (%)', `${nhanSS} (%)`],
-      [...lops.map(x => [x.l.ten_lop, tenDT(x.l.diem_truong_id), x.c.siSo, x.c.coMat, x.c.cp, x.c.kp, x.c.ct, x.c.tyLe ?? '', x.p.tyLe ?? '']),
+      [...lops.map(x => x.c.nghi ? [x.l.ten_lop, tenDT(x.l.diem_truong_id), 'Lớp nghỉ', '', '', '', '', '', x.p.tyLe ?? '']
+        : [x.l.ten_lop, tenDT(x.l.diem_truong_id), x.c.siSo, x.c.coMat, x.c.cp, x.c.kp, x.c.ct, x.c.tyLe ?? '', x.p.tyLe ?? '']),
        ['Tổng', '', tong.siSo || 0, tong.coMat || 0, tong.cp || 0, tong.kp || 0, tong.ct || 0, tong.tyLe ?? '', tongP.tyLe ?? '']]);
 
     // Học sinh vắng trong buổi
@@ -1840,6 +1876,7 @@ async function veChuyenCan(el) {
   async function taiKhoang() {
     const lan = ++lanTai;
     huyChart();
+    $('#cc-nghi-nut').classList.add('hidden');
     const K = F.preset === 'tuy' ? khoangTK('tuy', F.tu, F.den) : khoangTK(F.preset);
     if (F.preset !== 'tuy') { F.tu = K.tu; F.den = K.den; $('#cc-tu').value = K.tu; $('#cc-den').value = K.den; }
     if (!K.tu || !K.den || K.tu > K.den) { $('#cc-mota').textContent = 'Khoảng thời gian không hợp lệ.'; $('#cc-kpi').innerHTML = ''; return; }
@@ -1928,6 +1965,7 @@ async function veChuyenCan(el) {
   };
   el.onchange = e => {
     const id = e.target.id, v = e.target.value;
+    if (e.target.dataset.lopNghi) { e.target.disabled = true; danhNghi([+e.target.dataset.lopNghi], e.target.checked); return; }
     if (id === 'cc-che-do') { F.cheDo = v; hienLoc(); }
     else if (id === 'cc-ngay') { if (!v) return; F.ngay = v; }
     else if (id === 'cc-buoi') F.buoi = v;
@@ -1941,6 +1979,15 @@ async function veChuyenCan(el) {
   el.onclick = e => {
     const tab = e.target.closest('[data-tab-tk]');
     if (tab) { S.tkTab = tab.dataset.tabTk; dieuHuong(); return; }
+    if (e.target.id === 'cc-nghi-het') {
+      const ids = dsLop().filter(coTheDanhNghi).map(l => l.id);
+      if (confirm(`Đánh dấu ${ids.length} lớp${F.dt ? ' của điểm trường ' + tenDT(+F.dt) : ''} nghỉ buổi ${tenBuoi(F.buoi)} ${vn(F.ngay)}?`)) danhNghi(ids, true);
+      return;
+    }
+    if (e.target.id === 'cc-nghi-bo') {
+      if (confirm(`Bỏ đánh dấu nghỉ cho mọi lớp${F.dt ? ' của điểm trường ' + tenDT(+F.dt) : ''} buổi ${tenBuoi(F.buoi)} ${vn(F.ngay)}?`)) danhNghi(dsLop().map(l => l.id), false);
+      return;
+    }
     const t = e.target.closest('[data-lsu],#cc-csv-lop,#cc-csv-hs'); if (!t) return;
     if (t.dataset.lsu) { e.preventDefault(); lichSuHS(+t.dataset.lsu); }
     else if (t.id === 'cc-csv-lop') xuatLop && xuatLop();

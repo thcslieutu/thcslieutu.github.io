@@ -262,7 +262,31 @@ em.flat { color: var(--muted); font-weight: 500; }
   .sticky-col { position: static; }
   .tac-gia { display: none; }   /* thông tin tác giả chỉ hiện trên máy tính */
 }
+/* ---------- Chụp ảnh & In ---------- */
+.chi-in { display: none; }
+.dau-anh { font-size: 13px; color: var(--muted); padding: 2px 2px 12px; }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { background: #fff !important; font-size: 12px; }
+  .topbar, #nav, .tac-gia, #toast, #modal, .nhac-sao-luu, .bulk,
+  .btn, button.link, .seg:not(.on), .goi-y, .khong-chup { display: none !important; }
+  .chi-in { display: block; font-size: 12px; color: #555; margin: 0 0 8px; }
+  main { max-width: none; padding: 0 !important; }
+  .card { box-shadow: none; border-color: #ccc; padding: 10px 12px; margin-bottom: 10px; }
+  .kpi { box-shadow: none; border-color: #ccc; break-inside: avoid; }
+  .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .table-wrap, .hs-grid, .list { overflow: visible !important; max-height: none !important; }
+  .tbl th { background: #f0f0f0 !important; }
+  .tbl tr, .chart-box, .info-box { break-inside: avoid; }
+  .sticky-col { position: static !important; }
+  .grid-nhap, .grid2, .grid3, .grid-hs { grid-template-columns: 1fr !important; }
+  .chart-box { height: 260px; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
 @media (max-width: 760px) {
+  .nhan-nut { display: none; }
   .topbar { padding: 8px 12px; }
   .user #ten-user { display: none; }
   #nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); justify-content: space-around; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); z-index: 30; }

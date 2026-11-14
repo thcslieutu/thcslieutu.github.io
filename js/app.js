@@ -346,6 +346,75 @@ function moDoiMK() {
   };
 }
 
+/* ---------------- Chụp ảnh trang (PNG) & Lưu PDF / In ---------------- */
+/** Tên mục đang xem, vd "Thống kê – Chuyên cần" */
+function tenTrangHienTai() {
+  const v = location.hash.slice(1) || 'nhap';
+  const ten = MENU.find(m => m.id === v)?.ten || 'Trang';
+  return v === 'thongke' ? `${ten} – ${S.tkTab === 'cc' ? 'Chuyên cần' : 'Vi phạm'}` : ten;
+}
+const gioFile = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 16).replace(/(\d+)-(\d+)-(\d+)T(\d+):(\d+)/, '$3-$2-$1_$4h$5');
+const dauTrang = () => `${CFG.TEN_TRUONG || ''} · ${tenTrangHienTai()} · ${fmtTG(Date.now())}${S.profile?.ho_ten ? ' · ' + S.profile.ho_ten : ''}`;
+
+/** Tải thư viện chụp trang khi cần (lần đầu bấm) */
+let taiHtml2canvas = null;
+function canHtml2canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  return taiHtml2canvas || (taiHtml2canvas = new Promise((ok, loi) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = () => (window.html2canvas ? ok(window.html2canvas) : loi(new Error('Không tải được công cụ chụp.')));
+    s.onerror = () => { taiHtml2canvas = null; loi(new Error('Không tải được công cụ chụp. Kiểm tra kết nối mạng rồi thử lại.')); };
+    document.head.appendChild(s);
+  }));
+}
+
+/** Chụp toàn bộ nội dung trang (kể cả phần phải cuộn) thành ảnh PNG */
+async function chupTrang(btn) {
+  const goc = $('#noi-dung'); if (!goc) return;
+  const cu = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳<span class="nhan-nut"> Đang chụp…</span>';
+  try {
+    const h2c = await canHtml2canvas();
+    const cao = goc.scrollHeight + 60, rong = goc.scrollWidth;
+    // Ảnh nét (gấp đôi) nhưng không vượt giới hạn kích thước ảnh của trình duyệt
+    const tiLe = Math.max(0.5, Math.min(2, 14000 / cao, 14000 / rong, Math.sqrt(120e6 / (cao * rong))));
+    const canvas = await h2c(goc, {
+      scale: tiLe, backgroundColor: getComputedStyle(document.body).backgroundColor || '#f3f5f7', useCORS: true, logging: false,
+      windowWidth: document.documentElement.clientWidth, width: rong, height: cao, scrollX: 0, scrollY: -window.scrollY,
+      ignoreElements: e => e.classList?.contains('khong-chup'),
+      onclone: doc => {
+        const m = doc.querySelector('#noi-dung');
+        doc.querySelectorAll('.sticky-col').forEach(x => (x.style.position = 'static'));
+        doc.querySelectorAll('.table-wrap, .hs-grid, .list').forEach(x => { x.style.overflow = 'visible'; x.style.maxHeight = 'none'; });
+        const d = doc.createElement('div');
+        d.className = 'dau-anh'; d.textContent = dauTrang();
+        m.insertBefore(d, m.firstChild);
+      }
+    });
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    if (!blob) throw new Error('Trang quá dài, không tạo được ảnh. Hãy dùng “PDF / In” hoặc xuất CSV.');
+    const ten = boDau(tenTrangHienTai()).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `${ten}_${gioFile()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Đã chụp và tải ảnh về máy.');
+  } catch (e) {
+    toast(e.message || 'Không chụp được trang.', 'err');
+  } finally {
+    btn.disabled = false; btn.innerHTML = cu;
+  }
+}
+
+/** Lưu PDF / In: dùng hộp in của trình duyệt (chọn "Lưu dưới dạng PDF") */
+function inTrang() {
+  $('#in-dau').textContent = dauTrang();
+  const ten = document.title;
+  document.title = `${tenTrangHienTai()} – ${vn(homNay())}`;   // tên file PDF gợi ý
+  window.addEventListener('afterprint', () => (document.title = ten), { once: true });
+  setTimeout(() => window.print(), 50);
+}
+
 /** Gửi email chứa liên kết đặt lại mật khẩu (dùng cho Quên mật khẩu và cho Quản trị) */
 const guiLinkDatLaiMK = email => sb.auth.resetPasswordForEmail(email, { redirectTo: trangChu() });
 
@@ -411,6 +480,8 @@ function ganDangNhap() {
     }
   };
   $('#btn-doi-mk').onclick = moDoiMK;
+  $('#btn-chup').onclick = e => chupTrang(e.currentTarget);
+  $('#btn-in').onclick = inTrang;
   $('#btn-dang-xuat').onclick = async () => { await sb.auth.signOut(); history.replaceState(null, '', location.pathname); hienDangNhap(); };
 }
 

@@ -1554,8 +1554,16 @@ VIEWS.hocsinh = function (el) {
       if (moi && moi.trim() && moi.trim() !== dt.ten) await thucHien(sb.from('diem_truong').update({ ten: moi.trim() }).eq('id', dt.id), 'Đã đổi tên.');
     } else if (d.xoaDt) {
       const dt = S.dtMap.get(+d.xoaDt), n = S.lop.filter(l => l.diem_truong_id === dt.id).length;
+      const giao = S.nd.filter(u => (S.tptDT.get(u.id) || []).includes(dt.id));
+      if (giao.length) {
+        const ds = giao.map(u => `${u.ho_ten || u.email}${u.vai_tro !== 'tpt' ? ` (hiện là ${VAI_TRO[u.vai_tro]})` : ''}`).join(', ');
+        toast(`Điểm trường ${dt.ten} đang được phân công cho: ${ds}. ` + (laAdmin()
+          ? 'Vào mục Tài khoản → “Gán điểm trường” để bỏ (với người không còn là Tổng phụ trách: bấm Lưu ở dòng của họ).'
+          : 'Nhờ Quản trị bỏ phân công trước khi xóa.'), 'err');
+        return;
+      }
       if (confirm(`Xóa điểm trường ${dt.ten}?${n ? `\n\n${n} lớp của điểm trường này sẽ chuyển thành “chưa xếp điểm trường” (không mất dữ liệu).` : ''}`))
-        await thucHien(sb.from('diem_truong').delete().eq('id', dt.id), 'Đã xóa điểm trường.', 'Điểm trường đang được giao cho Tổng phụ trách. Vào mục Tài khoản đổi phân công trước khi xóa.');
+        await thucHien(sb.from('diem_truong').delete().eq('id', dt.id), 'Đã xóa điểm trường.', 'Điểm trường đang được phân công cho Tổng phụ trách. Quản trị vào mục Tài khoản bỏ phân công trước khi xóa.');
     } else if (d.chonLop) {
       S.hsLop = +d.chonLop; veLop(); veHS();
     } else if (d.suaHs) {
@@ -1852,6 +1860,8 @@ VIEWS.nguoidung = async function (el) {
     const row = { ho_ten: tr.querySelector('[name=ho_ten]').value.trim() || null, vai_tro: vt };
     const { data, error } = await sb.from('nguoi_dung').update(row).eq('id', id).select('id');
     if (error || !data.length) { toast(error ? dichLoi(error) : 'Không đủ quyền.', 'err'); return; }
+    // Không còn là Tổng phụ trách → bỏ phân công điểm trường (máy chủ cũng tự làm nếu đã chạy SQL cập nhật)
+    if (vt !== 'tpt' && (S.tptDT.get(id) || []).length) await sb.from('tpt_diem_truong').delete().eq('nguoi_dung_id', id);
     toast('Đã cập nhật.');
     if (vt === 'gvcn' && !S.lop.some(l => l.gvcn_id === id)) { await tai(); if (conSong()) moGanLop(id, tai); }
     else await tai();

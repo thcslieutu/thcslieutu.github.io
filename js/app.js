@@ -20,6 +20,8 @@ const PHAM_VI = { hoc_sinh: 'Học sinh', lop: 'Cả lớp' };
 const BIEN_PHAP_MAC_DINH = ['Nhắc nhở', 'Phê bình trước lớp', 'Viết bản tự kiểm điểm', 'Thông báo PHHS',
   'Mời PHHS đến trường', 'Lao động vệ sinh', 'Hạ mức đánh giá rèn luyện', 'Đưa ra Hội đồng kỷ luật'];
 const PHUT_HUY = CFG.PHUT_DUOC_HUY || 15;
+/** "4 giờ", "15 phút", "1 giờ 30 phút" */
+const tgHuy = (() => { const g = Math.floor(PHUT_HUY / 60), p = PHUT_HUY % 60; return [g && `${g} giờ`, p && `${p} phút`].filter(Boolean).join(' ') || '0 phút'; })();
 const NGAY_LUI = CFG.SO_NGAY_DUOC_LUI ?? 7;
 const THU = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MK_TOI_THIEU = 8;   // độ dài tối thiểu cho mật khẩu MỚI (đăng ký, đổi, đặt lại)
@@ -614,7 +616,7 @@ VIEWS.nhap = function (el) {
       <div id="tom-tat" class="tom-tat"></div>
       <p id="canh-bao" class="canh-bao small hidden"></p>
       <button id="btn-ghi" class="btn primary big" disabled>Ghi nhận</button>
-      <p class="muted small">Có thể hủy trong ${PHUT_HUY} phút sau khi bấm <b>Ghi nhận</b>.</p>
+      <p class="muted small">Có thể hủy trong ${tgHuy} sau khi bấm <b>Ghi nhận</b>.</p>
       <h3>Bạn vừa ghi nhận</h3>
       <div id="gan-day"><p class="muted small">Đang tải…</p></div>
     </section>
@@ -696,12 +698,14 @@ VIEWS.nhap = function (el) {
 
   async function taiGanDay() {
     const box = $('#gan-day'); if (!box) return;
-    const { data, error } = await sb.from('v_vi_pham').select('id,thoi_gian,tao_luc,hoc_sinh_id,ho_ten,ten_lop,ten_vi_pham')
-      .eq('nguoi_ghi', S.user.id).order('tao_luc', { ascending: false }).limit(8);
+    // Mọi vi phạm còn trong thời gian được hủy (tối đa 100), ít nhất 8 vi phạm gần nhất
+    const { data: tatCa, error } = await sb.from('v_vi_pham').select('id,thoi_gian,tao_luc,hoc_sinh_id,ho_ten,ten_lop,ten_vi_pham')
+      .eq('nguoi_ghi', S.user.id).order('tao_luc', { ascending: false }).limit(100);
     if (!$('#gan-day')) return;
     if (error) { box.innerHTML = `<p class="err">${esc(dichLoi(error))}</p>`; return; }
     const now = Date.now();
-    box.innerHTML = data.length ? `<ul class="recent">${data.map(r => `<li>
+    const data = tatCa.filter((r, i) => i < 8 || now - new Date(r.tao_luc) < PHUT_HUY * 60e3);
+    box.innerHTML = data.length ? `<ul class="recent ${data.length > 8 ? 'recent-dai' : ''}">${data.map(r => `<li>
         <span class="muted">${fmtGio(r.thoi_gian)}</span>
         <span><b>${esc(tenHS(r))}</b> <i class="muted">${esc(r.ten_lop)}</i> — ${esc(r.ten_vi_pham)}</span>
         ${now - new Date(r.tao_luc) < PHUT_HUY * 60e3 ? `<button type="button" class="link" data-huy="${r.id}">Hủy</button>` : ''}</li>`).join('')}</ul>`
@@ -736,7 +740,7 @@ VIEWS.nhap = function (el) {
       if (!confirm('Hủy vi phạm vừa ghi nhận?')) return;
       const { data, error } = await sb.from('vi_pham').delete().eq('id', +d.huy).select('id');
       if (error) toast(dichLoi(error), 'err');
-      else if (!data.length) toast(`Không thể hủy (đã quá ${PHUT_HUY} phút).`, 'err');
+      else if (!data.length) toast(`Không thể hủy (đã quá ${tgHuy}).`, 'err');
       else { toast('Đã hủy.'); taiGanDay(); capNhatBadge(); }
     }
   };

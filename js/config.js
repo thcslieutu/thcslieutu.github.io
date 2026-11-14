@@ -16,7 +16,7 @@ window.APP_CONFIG = {
   NAM_HOC_KET_THUC: '05-31',
 
   // Người ghi được tự hủy vi phạm vừa nhập trong bao nhiêu phút (khớp với schema.sql)
-  PHUT_DUOC_HUY: 15,
+  PHUT_DUOC_HUY: 240,
 
   // Giáo viên được chọn ngày giờ vi phạm lùi về trước tối đa bao nhiêu ngày
   // (BGH, Quản trị không giới hạn). Khớp với "so_ngay_lui" trong schema.sql

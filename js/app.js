@@ -1457,6 +1457,7 @@ VIEWS.thongke = async function (el) {
    4. ĐIỂM TRƯỜNG, LỚP & HỌC SINH
    ===================================================================== */
 VIEWS.hocsinh = function (el) {
+  const chonHS = new Set();   // học sinh đang được tick (trong lớp đang xem)
   const ve = () => {
     if (!S.lopMap.has(S.hsLop)) S.hsLop = S.lop[0]?.id || 0;
     el.innerHTML = `
@@ -1502,18 +1503,35 @@ VIEWS.hocsinh = function (el) {
         ? nhomTheoDT(S.lop).map(([d, a]) => `<div class="nhom-ten">${esc(d ? tenDT(d) : 'Chưa xếp điểm trường')}</div>${a.map(item).join('')}`).join('')
         : S.lop.map(item).join('');
   };
+  const veBulkHS = () => {
+    const b = $('#hs-bulk'); if (!b) return;
+    const ds = S.hs.filter(h => h.lop_id === S.hsLop);
+    for (const id of [...chonHS]) if (!ds.some(h => h.id === id)) chonHS.delete(id);
+    b.classList.toggle('hidden', !chonHS.size);
+    $('#hs-bulk-n').textContent = `Đã chọn ${chonHS.size} học sinh`;
+    const all = $('#hs-chk-all');
+    if (all) { all.checked = ds.length > 0 && chonHS.size === ds.length; all.indeterminate = chonHS.size > 0 && chonHS.size < ds.length; }
+    $$('[data-chk-hs]').forEach(c => c.closest('tr').classList.toggle('sel', c.checked));
+  };
   const veHS = () => {
     const ds = S.hs.filter(h => h.lop_id === S.hsLop);
     $('#hs-tieu-de').textContent = S.hsLop ? `Học sinh lớp ${tenLop(S.hsLop)} (${ds.filter(h => h.dang_hoc).length})` : 'Học sinh';
     $('#f-hs').classList.toggle('hidden', !S.hsLop);
-    $('#hs-ds').innerHTML = ds.length ? `<table class="tbl"><thead><tr><th>STT</th><th>Họ và tên</th><th>Lớp</th><th>Tình trạng</th><th></th></tr></thead><tbody>
-      ${ds.map(h => `<tr class="${h.dang_hoc ? '' : 'nghi'}"><td>${S.stt.get(h.id) || ''}</td>
+    $('#hs-ds').innerHTML = ds.length ? `
+      <div class="bulk hidden" id="hs-bulk"><b id="hs-bulk-n"></b>
+        <button type="button" class="btn sm" data-act="hs-nghi">Đánh dấu đã nghỉ</button>
+        <button type="button" class="btn sm danger" data-act="hs-xoa">Xóa học sinh đã chọn</button>
+        <button type="button" class="btn sm" data-act="hs-bo">Bỏ chọn</button></div>
+      <table class="tbl"><thead><tr><th class="w1"><input type="checkbox" id="hs-chk-all" title="Chọn cả lớp" aria-label="Chọn cả lớp"></th><th>STT</th><th>Họ và tên</th><th>Lớp</th><th>Tình trạng</th><th></th></tr></thead><tbody>
+      ${ds.map(h => `<tr class="${h.dang_hoc ? '' : 'nghi'}"><td><input type="checkbox" data-chk-hs="${h.id}" ${chonHS.has(h.id) ? 'checked' : ''} aria-label="Chọn"></td><td>${S.stt.get(h.id) || ''}</td>
         <td><a href="#" data-lsu="${h.id}">${esc(h.ho_ten)}</a></td>
         <td><select class="input sm" data-chuyen="${h.id}">${optLop(h.lop_id)}</select></td>
         <td><label class="switch"><input type="checkbox" data-dang-hoc="${h.id}" ${h.dang_hoc ? 'checked' : ''}> ${h.dang_hoc ? 'Đang học' : 'Đã nghỉ'}</label></td>
         <td class="nowrap"><button type="button" class="link" data-sua-hs="${h.id}">Sửa tên</button><button type="button" class="link danger" data-xoa-hs="${h.id}">Xóa</button></td></tr>`).join('')}</tbody></table>
-      <p class="muted small">Chuyển lớp không ảnh hưởng vi phạm cũ: vi phạm được tính cho lớp tại thời điểm ghi nhận.</p>`
+      <p class="muted small">Tick ô đầu dòng để chọn nhiều học sinh (ô trên cùng: chọn cả lớp), rồi bấm <b>Xóa học sinh đã chọn</b>.
+      Chuyển lớp không ảnh hưởng vi phạm cũ: vi phạm được tính cho lớp tại thời điểm ghi nhận.</p>`
       : `<p class="muted pad">${S.hsLop ? 'Lớp chưa có học sinh.' : ''}</p>`;
+    veBulkHS();
   };
   const conSong = giuPhien();
   const lamMoi = async () => { await taiDanhMuc(); if (conSong()) ve(); };
@@ -1540,15 +1558,23 @@ VIEWS.hocsinh = function (el) {
     }
   };
   el.onclick = async e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'hs-bo') { chonHS.clear(); veHS(); return; }
+    if (act === 'hs-nghi') {
+      const ids = [...chonHS].filter(id => S.hsMap.get(id)?.dang_hoc);
+      if (!ids.length) { toast('Các học sinh đã chọn đều đã ở trạng thái Đã nghỉ.'); return; }
+      if (!confirm(`Đánh dấu ${ids.length} học sinh là “Đã nghỉ”?\n\nCác em không còn hiện ở màn hình Nhập vi phạm; vi phạm cũ được giữ nguyên.`)) return;
+      if (await thucHien(sb.from('hoc_sinh').update({ dang_hoc: false }).in('id', ids), `Đã đánh dấu ${ids.length} học sinh đã nghỉ.`)) chonHS.clear();
+      return;
+    }
+    if (act === 'hs-xoa') { moXoaNhieuHS([...chonHS], async () => { chonHS.clear(); await lamMoi(); }); return; }
     const t = e.target.closest('[data-chon-lop],[data-sua-lop],[data-xoa-lop],[data-doi-dt],[data-xoa-dt],[data-sua-hs],[data-xoa-hs],[data-lsu],#btn-nhap-nhieu');
     if (!t) return;
     const d = t.dataset;
     if (d.suaLop) {
       moSuaLop(+d.suaLop, lamMoi);
     } else if (d.xoaLop) {
-      const l = S.lopMap.get(+d.xoaLop), n = S.hs.filter(h => h.lop_id === l.id).length;
-      if (n) { toast(`Lớp ${l.ten_lop} còn ${n} học sinh. Hãy chuyển học sinh sang lớp khác trước khi xóa.`, 'err'); return; }
-      if (confirm(`Xóa lớp ${l.ten_lop}?`)) await thucHien(sb.from('lop').delete().eq('id', l.id), 'Đã xóa lớp.', `Lớp ${l.ten_lop} đã có vi phạm được ghi nhận nên không thể xóa (để giữ lịch sử).`);
+      moXoaLop(+d.xoaLop, async () => { if (S.hsLop === +d.xoaLop) S.hsLop = null; chonHS.clear(); await lamMoi(); });
     } else if (d.doiDt) {
       const dt = S.dtMap.get(+d.doiDt), moi = prompt('Tên điểm trường mới:', dt.ten);
       if (moi && moi.trim() && moi.trim() !== dt.ten) await thucHien(sb.from('diem_truong').update({ ten: moi.trim() }).eq('id', dt.id), 'Đã đổi tên.');
@@ -1565,7 +1591,7 @@ VIEWS.hocsinh = function (el) {
       if (confirm(`Xóa điểm trường ${dt.ten}?${n ? `\n\n${n} lớp của điểm trường này sẽ chuyển thành “chưa xếp điểm trường” (không mất dữ liệu).` : ''}`))
         await thucHien(sb.from('diem_truong').delete().eq('id', dt.id), 'Đã xóa điểm trường.', 'Điểm trường đang được phân công cho Tổng phụ trách. Quản trị vào mục Tài khoản bỏ phân công trước khi xóa.');
     } else if (d.chonLop) {
-      S.hsLop = +d.chonLop; veLop(); veHS();
+      S.hsLop = +d.chonLop; chonHS.clear(); veLop(); veHS();
     } else if (d.suaHs) {
       const h = S.hsMap.get(+d.suaHs), moi = prompt('Họ tên mới:', h.ho_ten);
       if (moi && moi.trim()) await thucHien(sb.from('hoc_sinh').update({ ho_ten: chuanHoaTen(moi) }).eq('id', h.id), 'Đã sửa.');
@@ -1579,11 +1605,108 @@ VIEWS.hocsinh = function (el) {
   };
   el.onchange = async e => {
     const d = e.target.dataset;
+    if (e.target.id === 'hs-chk-all') {
+      S.hs.filter(h => h.lop_id === S.hsLop).forEach(h => e.target.checked ? chonHS.add(h.id) : chonHS.delete(h.id));
+      $$('[data-chk-hs]').forEach(c => (c.checked = e.target.checked)); veBulkHS(); return;
+    }
+    if (d.chkHs) { e.target.checked ? chonHS.add(+d.chkHs) : chonHS.delete(+d.chkHs); veBulkHS(); return; }
     if (d.chuyen) await thucHien(sb.from('hoc_sinh').update({ lop_id: +e.target.value }).eq('id', +d.chuyen), `Đã chuyển sang lớp ${tenLop(+e.target.value)}.`);
     else if (d.dangHoc) await thucHien(sb.from('hoc_sinh').update({ dang_hoc: e.target.checked }).eq('id', +d.dangHoc));
   };
   ve();
 };
+
+/** Xóa lớp cùng toàn bộ học sinh của lớp và các vi phạm liên quan */
+async function moXoaLop(lopId, xong) {
+  const l = S.lopMap.get(lopId); if (!l) return;
+  const hs = S.hs.filter(h => h.lop_id === lopId), ids = hs.map(h => h.id);
+  moModal(`<h2>Xóa lớp ${esc(l.ten_lop)}</h2><p class="muted">Đang kiểm tra dữ liệu của lớp…</p>`);
+  let vp;
+  try {
+    vp = await layHet(() => {
+      const q = sb.from('vi_pham').select('id').order('id');
+      return ids.length ? q.or(`lop_id.eq.${lopId},hoc_sinh_id.in.(${ids.join(',')})`) : q.eq('lop_id', lopId);
+    });
+  } catch (e) { moModal(`<h2>Xóa lớp ${esc(l.ten_lop)}</h2><p class="err">${esc(dichLoi(e))}</p><div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Đóng</button></div>`); return; }
+  if ($('#modal').classList.contains('hidden')) return;
+  const tenXN = l.ten_lop;
+  moModal(`<h2>Xóa lớp ${esc(l.ten_lop)}</h2>
+    <div class="info-box canh-bao-do"><p class="small">Sẽ xóa vĩnh viễn:</p><ul class="small">
+      <li>Lớp <b>${esc(l.ten_lop)}</b>${l.gvcn_id ? ` (GVCN: ${esc(tenND(l.gvcn_id))})` : ''}</li>
+      <li><b>${hs.length}</b> học sinh của lớp${hs.some(h => !h.dang_hoc) ? ` (gồm ${hs.filter(h => !h.dang_hoc).length} em đã nghỉ)` : ''}</li>
+      <li><b>${so(vp.length)}</b> vi phạm của lớp và của các học sinh này</li></ul>
+      <p class="small"><b>Không thể hoàn tác.</b>${vp.length ? ' Nếu cần giữ số liệu, hãy xuất CSV ở mục Thống kê / Xử lý trước khi xóa.' : ''}</p></div>
+    <p class="small">Gõ tên lớp <b>${esc(tenXN)}</b> để xác nhận:</p>
+    <input class="input" id="xl-ma" autocomplete="off" placeholder="${esc(tenXN)}">
+    <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button>
+      <button type="button" class="btn danger-solid" id="xl-ok" disabled>Xóa lớp</button></div>`);
+  $('#xl-ma').oninput = e => ($('#xl-ok').disabled = chuanHoaLop(e.target.value) !== chuanHoaLop(tenXN));
+  $('#xl-ma').focus();
+  $('#xl-ok').onclick = async () => {
+    const btn = $('#xl-ok'); btn.disabled = true; btn.textContent = 'Đang xóa…';
+    try {
+      for (let i = 0; i < vp.length; i += 200) {
+        const { error } = await sb.from('vi_pham').delete().in('id', vp.slice(i, i + 200).map(r => r.id));
+        if (error) throw error;
+      }
+      for (let i = 0; i < ids.length; i += 200) {
+        const { error } = await sb.from('hoc_sinh').delete().in('id', ids.slice(i, i + 200));
+        if (error) throw error;
+      }
+      const { error } = await sb.from('lop').delete().eq('id', lopId);
+      if (error) throw error;
+    } catch (e) {
+      toast('Chưa xóa xong: ' + dichLoi(e) + ' Hãy bấm Xóa lớp lần nữa.', 'err');
+      btn.disabled = false; btn.textContent = 'Xóa lớp'; return;
+    }
+    toast(`Đã xóa lớp ${l.ten_lop}, ${hs.length} học sinh${vp.length ? ` và ${vp.length} vi phạm` : ''}.`);
+    dongModal(); capNhatBadge(); await xong();
+  };
+}
+
+/** Xóa nhiều học sinh một lần. Học sinh đã có vi phạm: chỉ xóa khi tick "xóa luôn vi phạm". */
+async function moXoaNhieuHS(ids, xong) {
+  if (!ids.length) return;
+  moModal('<h2>Xóa học sinh</h2><p class="muted">Đang kiểm tra vi phạm của các em…</p>');
+  let vp;
+  try { vp = await layHet(() => sb.from('vi_pham').select('id,hoc_sinh_id').in('hoc_sinh_id', ids).order('id')); }
+  catch (e) { moModal(`<h2>Xóa học sinh</h2><p class="err">${esc(dichLoi(e))}</p><div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Đóng</button></div>`); return; }
+  if ($('#modal').classList.contains('hidden')) return;
+  const soVP = new Map(); vp.forEach(r => soVP.set(r.hoc_sinh_id, (soVP.get(r.hoc_sinh_id) || 0) + 1));
+  const hs = ids.map(id => S.hsMap.get(id)).filter(Boolean).sort(soSanhTen);
+  const coVP = hs.filter(h => soVP.has(h.id)), khongVP = hs.length - coVP.length;
+  const toiDa = 20;
+  moModal(`<h2>Xóa ${hs.length} học sinh</h2>
+    <div class="info-box"><p class="small">${hs.slice(0, toiDa).map(h => esc(h.ho_ten) + (soVP.has(h.id) ? ` <span class="nang">${soVP.get(h.id)} VP</span>` : '')).join(', ')}${hs.length > toiDa ? ` … và ${hs.length - toiDa} em khác` : ''}</p></div>
+    ${coVP.length ? `<div class="info-box canh-bao-do"><p class="small"><b>${coVP.length}</b> em đã có tổng cộng <b>${vp.length}</b> vi phạm được ghi nhận.</p>
+      <label class="switch"><input type="checkbox" id="xh-vp"> Xóa luôn ${vp.length} vi phạm của các em này</label>
+      <p class="small muted" style="margin-top:6px">Không tick: chỉ xóa ${khongVP} em chưa có vi phạm; ${coVP.length} em có vi phạm được giữ lại (nên bấm “Đánh dấu đã nghỉ” để giữ lịch sử).</p></div>` : ''}
+    <p class="small"><b>Không thể hoàn tác.</b></p>
+    <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button>
+      <button type="button" class="btn danger-solid" id="xh-ok">Xóa</button></div>`);
+  const nhan = () => { const vpCung = $('#xh-vp')?.checked; $('#xh-ok').textContent = `Xóa ${vpCung ? hs.length : khongVP} học sinh${vpCung && vp.length ? ` và ${vp.length} vi phạm` : ''}`; $('#xh-ok').disabled = !vpCung && !khongVP; };
+  nhan();
+  if ($('#xh-vp')) $('#xh-vp').onchange = nhan;
+  $('#xh-ok').onclick = async () => {
+    const vpCung = !!$('#xh-vp')?.checked;
+    const xoa = vpCung ? hs.map(h => h.id) : hs.filter(h => !soVP.has(h.id)).map(h => h.id);
+    const btn = $('#xh-ok'); btn.disabled = true; btn.textContent = 'Đang xóa…';
+    try {
+      if (vpCung) for (let i = 0; i < vp.length; i += 200) {
+        const { error } = await sb.from('vi_pham').delete().in('id', vp.slice(i, i + 200).map(r => r.id));
+        if (error) throw error;
+      }
+      for (let i = 0; i < xoa.length; i += 200) {
+        const { error } = await sb.from('hoc_sinh').delete().in('id', xoa.slice(i, i + 200));
+        if (error) throw error;
+      }
+    } catch (e) {
+      toast(dichLoi(e), 'err'); btn.disabled = false; nhan(); return;
+    }
+    toast(`Đã xóa ${xoa.length} học sinh` + (vpCung && vp.length ? ` và ${vp.length} vi phạm.` : '.') + (!vpCung && coVP.length ? ` Giữ lại ${coVP.length} em có vi phạm.` : ''));
+    dongModal(); capNhatBadge(); await xong();
+  };
+}
 
 function moSuaLop(id, xong) {
   const l = S.lopMap.get(id);

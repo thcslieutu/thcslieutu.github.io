@@ -1745,11 +1745,13 @@ async function veChuyenCan(el) {
   /* Lớp nghỉ theo buổi (bảng lop_nghi) */
   let coBangNghi = true;
   const layNghi = async ngay => {
-    const { data, error } = await sb.from('lop_nghi').select('lop_id').eq('ngay', ngay).eq('buoi', F.buoi);
+    const { data, error } = await sb.from('lop_nghi').select('lop_id,nguoi,luc').eq('ngay', ngay).eq('buoi', F.buoi);
     if (error) { coBangNghi = false; return new Set(); }
+    if (ngay === F.ngay) aiDanh = new Map(data.map(r => [r.lop_id, r]));
     return new Set(data.map(r => r.lop_id));
   };
-  const coTheDanhNghi = l => laBGH() || (vaiTro() === 'tpt' && (!dtCuaTPT(S.user.id).length || dtCuaTPT(S.user.id).includes(l.diem_truong_id)));
+  const coTheDanhNghi = () => true;   // mọi tài khoản đã được duyệt (máy chủ kiểm tra lại)
+  let aiDanh = new Map();   // lop_id → { nguoi, luc } của buổi đang xem
   const danhNghi = async (ids, nghi) => {
     ids = ids.filter(id => coTheDanhNghi(S.lopMap.get(id)));
     if (!ids.length) return;
@@ -1835,15 +1837,16 @@ async function veChuyenCan(el) {
     $('#cc-td-lop').textContent = `Theo lớp – buổi ${tenBuoi(F.buoi)} ${vn(ngay)}`;
     const duocDanh = lops.some(x => coTheDanhNghi(x.l));
     $('#cc-gc-lop').innerHTML = (coBangNghi
-        ? `${duocDanh ? '<b>Tick ô “Nghỉ”</b> cho lớp không học buổi này (lưu ngay, mọi người cùng thấy) – lớp nghỉ không tính vào thống kê. ' : 'Cột “Nghỉ”: lớp không học buổi này (BGH / Tổng phụ trách đánh dấu). '}`
+        ? '<b>Tick ô “Nghỉ”</b> cho lớp không học buổi này (lưu ngay, mọi người cùng thấy; rê chuột vào ô để xem ai đánh dấu) – lớp nghỉ không tính vào thống kê. '
         : '<span class="err">Chưa chạy file cap-nhat-lop-nghi.sql nên chưa đánh dấu được lớp nghỉ. </span>')
       + 'Lớp có học sinh nghỉ không phép hoặc cúp tiết được tô màu. Cúp tiết: học sinh vẫn tính là có mặt.'
       + (nghiCoVP.length ? `<br><span class="chu-do">⚠ Lớp ${esc(nghiCoVP.join(', '))} được đánh dấu nghỉ nhưng buổi này vẫn có vi phạm chuyên cần được ghi – kiểm tra lại.</span>` : '');
     $('#cc-nghi-nut').classList.toggle('hidden', !(coBangNghi && duocDanh));
-    const oNghi = x => coBangNghi ? `<td class="c"><input type="checkbox" data-lop-nghi="${x.l.id}" ${x.c.nghi ? 'checked' : ''} ${coTheDanhNghi(x.l) ? '' : 'disabled'} aria-label="Lớp ${esc(x.l.ten_lop)} nghỉ buổi này"></td>` : '';
+    const aiTick = x => { const a = aiDanh.get(x.l.id); return a?.luc ? `Đánh dấu nghỉ bởi ${tenND(a.nguoi) || 'không rõ'} lúc ${fmtGio(a.luc)}` : `Tick nếu lớp ${x.l.ten_lop} nghỉ buổi này`; };
+    const oNghi = x => coBangNghi ? `<td class="c"><input type="checkbox" data-lop-nghi="${x.l.id}" ${x.c.nghi ? 'checked' : ''} title="${esc(aiTick(x))}" aria-label="${esc(aiTick(x))}"></td>` : '';
     $('#cc-bang-lop').innerHTML = lops.length ? `<table class="tbl">${dauBang(`${coBangNghi ? '<th class="c">Nghỉ</th>' : ''}<th>Lớp</th>${coDT() ? '<th>Điểm trường</th>' : ''}`)}<tbody>
       ${lops.map(x => x.c.nghi
-        ? `<tr class="dong-nghi">${oNghi(x)}<td><b>${esc(x.l.ten_lop)}</b></td>${coDT() ? `<td class="small">${esc(tenDT(x.l.diem_truong_id))}</td>` : ''}<td colspan="8"><span class="tag-nghi">Lớp nghỉ</span>${x.c.coVP ? ' <span class="chu-do small">⚠ vẫn có vi phạm chuyên cần</span>' : ''}</td></tr>`
+        ? `<tr class="dong-nghi">${oNghi(x)}<td><b>${esc(x.l.ten_lop)}</b></td>${coDT() ? `<td class="small">${esc(tenDT(x.l.diem_truong_id))}</td>` : ''}<td colspan="8"><span class="tag-nghi">Lớp nghỉ</span>${aiDanh.get(x.l.id)?.luc ? ` <span class="small">· ${esc(tenND(aiDanh.get(x.l.id).nguoi) || '')} ${fmtGio(aiDanh.get(x.l.id).luc)}</span>` : ''}${x.c.coVP ? ' <span class="chu-do small">⚠ vẫn có vi phạm chuyên cần</span>' : ''}</td></tr>`
         : `<tr class="${x.c.kp || x.c.ct ? 'dong-canh-bao' : ''}">${oNghi(x)}<td><b>${esc(x.l.ten_lop)}</b></td>${coDT() ? `<td class="small">${esc(tenDT(x.l.diem_truong_id))}</td>` : ''}${dongSo(x.l.ten_lop, x.c, x.p)}</tr>`).join('')}
       <tr class="dong-tong">${coBangNghi ? '<td></td>' : ''}<td><b>Tổng</b></td>${coDT() ? '<td></td>' : ''}${dongSo('', tong, tongP)}</tr></tbody></table>` : '<p class="muted pad">Chưa có lớp.</p>';
     xuatLop = () => xuatCSV(`chuyen-can_${F.buoi}_${ngay}.csv`,

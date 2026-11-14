@@ -162,7 +162,10 @@ function moModal(html, rong = false) {
   $('.modal-box').classList.toggle('rong', rong);
   $('#modal').classList.remove('hidden');
 }
-function dongModal() { $('#modal').classList.add('hidden'); $('#modal-body').innerHTML = ''; }
+function dongModal() {
+  $('#modal').classList.add('hidden'); $('#modal-body').innerHTML = '';
+  if (S.choModal) { const f = S.choModal; S.choModal = null; f('huy'); }   // hộp hỏi đang chờ → coi như Hủy
+}
 
 const ic = p => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 const ICON = {
@@ -671,6 +674,25 @@ VIEWS.nhap = function (el) {
   $('#tg-vp').onfocus = veTG;
   el.onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !$('#btn-ghi').disabled) $('#btn-ghi').click(); };
 
+  /** Tìm các vi phạm trùng (cùng HS/lớp tập thể, cùng loại, cùng ngày, cùng buổi) đã được ghi trước đó */
+  async function timTrung(rows, thoiGian) {
+    const t = thoiGian || new Date().toISOString(), ngay = ngayVN(t), b = buoiCua(t);
+    const loai = [...new Set(rows.map(r => r.loai_id))];
+    const hs = [...new Set(rows.map(r => r.hoc_sinh_id).filter(Boolean))];
+    let q = sb.from('v_vi_pham').select('id,hoc_sinh_id,lop_id,loai_id,thoi_gian,nguoi_ghi,ten_nguoi_ghi,ho_ten,ten_lop,ten_vi_pham')
+      .gte('thoi_gian', tuNgay(ngay)).lt('thoi_gian', denNgay(ngay)).in('loai_id', loai).order('thoi_gian');
+    q = hs.length ? q.in('hoc_sinh_id', hs) : q.eq('lop_id', rows[0].lop_id).is('hoc_sinh_id', null);
+    const { data, error } = await q;
+    if (error) { console.warn('Không kiểm tra được vi phạm trùng:', error.message); return new Map(); }
+    const m = new Map();   // khóa → lần ghi đầu tiên trong buổi
+    for (const r of data) {
+      if (buoiCua(r.thoi_gian) !== b) continue;
+      const k = khoaTrung(r);
+      if (!m.has(k)) m.set(k, r);
+    }
+    return m;
+  }
+
   $('#btn-ghi').onclick = async () => {
     const cd = cheDo();
     const ghiChu = $('#ghi-chu').value.trim() || null;
@@ -693,10 +715,24 @@ VIEWS.nhap = function (el) {
       for (const h of N.hs) for (const l of N.loai) rows.push({ hoc_sinh_id: h, lop_id: S.hsMap.get(h)?.lop_id, loai_id: l, ghi_chu: ghiChu, thoi_gian: thoiGian });
     }
     if (!rows.length) return;
-    const b = $('#btn-ghi'); b.disabled = true; b.textContent = 'Đang lưu…';
-    const { error } = await sb.from('vi_pham').insert(rows);
+    const b = $('#btn-ghi'); b.disabled = true; b.textContent = 'Đang kiểm tra…';
+
+    // Kiểm tra trùng trong cùng buổi
+    let ghi = rows;
+    const trung = await timTrung(rows, thoiGian);
+    const dsTrung = rows.filter(r => trung.has(khoaTrung(r)));
+    if (dsTrung.length) {
+      const chon = await hoiTrung(dsTrung.map(r => trung.get(khoaTrung(r))), rows.length);
+      if (chon === 'huy') { if (conSong()) veTomTat(); return; }
+      if (chon === 'bo_trung') ghi = rows.filter(r => !trung.has(khoaTrung(r)));
+      if (!ghi.length) { toast('Không ghi nhận thêm vi phạm nào.'); if (conSong()) veTomTat(); return; }
+      if (!conSong()) return;
+    }
+
+    b.textContent = 'Đang lưu…';
+    const { error } = await sb.from('vi_pham').insert(ghi);
     if (error) { toast(dichLoi(error), 'err'); if (conSong()) veTomTat(); return; }
-    toast(`Đã ghi nhận ${rows.length} vi phạm.`);
+    toast(`Đã ghi nhận ${ghi.length} vi phạm.` + (ghi.length < rows.length ? ` Bỏ qua ${rows.length - ghi.length} mục đã có.` : ''));
     N.hs.clear(); N.loai.clear();
     capNhatBadge();
     if (!conSong()) return;
@@ -707,6 +743,43 @@ VIEWS.nhap = function (el) {
   dongBoLoai();
   veLop(); veHS(); veLoai(); veTomTat(); veTG(); taiGanDay();
 };
+
+/* ---------- Kiểm tra vi phạm trùng trong cùng buổi ---------- */
+const BUOI = { sang: 'sáng', chieu: 'chiều', toi: 'ngoài giờ' };
+/** Buổi theo giờ Việt Nam: sáng < 12h ≤ chiều < 18h ≤ ngoài giờ (khớp biểu đồ "theo buổi") */
+const buoiCua = ts => { const h = gioVN(ts); return h < 12 ? 'sang' : h < 18 ? 'chieu' : 'toi'; };
+const khoaTrung = r => `${r.hoc_sinh_id ? 'h' + r.hoc_sinh_id : 'l' + r.lop_id}|${r.loai_id}`;
+const gioPhutVN = ts => new Date(ts).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+
+/** Hỏi khi trùng. Trả về 'ghi_het' | 'bo_trung' | 'huy' */
+function hoiTrung(dsCu, tongSo) {
+  return new Promise(xong => {
+    const nguoi = r => r.nguoi_ghi === S.user?.id ? 'chính thầy cô' : `<b>${esc(r.ten_nguoi_ghi || 'một người khác')}</b>`;
+    const dong = r => `vi phạm <b>“${esc(r.ten_vi_pham)}”</b> của <b>${esc(r.hoc_sinh_id ? r.ho_ten : 'tập thể lớp')}</b> (${esc(r.ten_lop)})
+      đã được ${nguoi(r)} ghi nhận vào lúc <b>${gioPhutVN(r.thoi_gian)}</b> buổi ${BUOI[buoiCua(r.thoi_gian)]} cùng ngày <b>${vn(ngayVN(r.thoi_gian))}</b>`;
+    const tatCa = dsCu.length === tongSo;
+    moModal(`<h2>Vi phạm đã được ghi nhận</h2>
+      ${dsCu.length === 1
+        ? `<p>Trong cùng buổi, ${dong(dsCu[0])}.</p>`
+        : `<p>Trong cùng buổi, ${dsCu.length} vi phạm sau đã được ghi nhận:</p><ul class="ds-trung">${dsCu.map(r => `<li>${dong(r).replace(/^vi phạm /, '')}</li>`).join('')}</ul>`}
+      <p><b>Thầy cô có muốn ghi nhận ${dsCu.length === 1 ? 'lần nữa' : 'thêm lần nữa'} không?</b></p>
+      <div class="modal-actions wrap-actions">
+        <span class="sp"></span>
+        ${tatCa
+          ? `<button type="button" class="btn" data-chon="huy">Không, bỏ qua</button>
+             <button type="button" class="btn primary" data-chon="ghi_het">Có, ghi nhận lần nữa</button>`
+          : `<button type="button" class="btn" data-chon="huy">Hủy</button>
+             <button type="button" class="btn" data-chon="ghi_het">Ghi tất cả (${tongSo})</button>
+             <button type="button" class="btn primary" data-chon="bo_trung">Bỏ qua mục trùng, ghi ${tongSo - dsCu.length} mục còn lại</button>`}
+      </div>`);
+    S.choModal = xong;
+    $('#modal-body').onclick = e => {
+      const t = e.target.closest('[data-chon]'); if (!t) return;
+      S.choModal = null; dongModal(); xong(t.dataset.chon);
+    };
+    $('#modal-body [data-chon].primary')?.focus();
+  });
+}
 
 /* =====================================================================
    2. XỬ LÝ VI PHẠM

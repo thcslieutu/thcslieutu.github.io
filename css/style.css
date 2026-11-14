@@ -226,6 +226,9 @@ em.flat { color: var(--muted); font-weight: 500; }
 .modal-box.rong { max-width: 860px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 18px; align-items: center; }
 .modal-actions .sp { flex: 1; }
+.modal-actions.wrap-actions { flex-wrap: wrap; }
+.ds-trung { padding-left: 20px; margin: 6px 0; }
+.ds-trung li { margin: 6px 0; }
 .info-box { background: var(--bg); border-radius: 9px; padding: 10px 12px; margin-bottom: 4px; }
 .radio-row { display: flex; gap: 16px; flex-wrap: wrap; }
 .radio { display: inline-flex; gap: 6px; align-items: center; color: var(--text); font-size: 14px; cursor: pointer; }

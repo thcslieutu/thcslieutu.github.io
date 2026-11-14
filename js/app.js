@@ -650,8 +650,15 @@ VIEWS.nhap = function (el) {
     } else if (d.hs) {
       chonHS(+d.hs); t.classList.toggle('on'); doiCheDo();
     } else if (d.loai) {
-      const id = +d.loai; N.loai.has(id) ? N.loai.delete(id) : N.loai.add(id);
-      t.classList.toggle('on'); veTomTat();
+      const id = +d.loai, laCC = !!S.loai.find(l => l.id === id)?.chuyen_can;
+      if (N.loai.has(id)) N.loai.delete(id);
+      else {
+        // Vi phạm chuyên cần: mỗi lần chỉ chọn một loại (bỏ chọn loại chuyên cần khác)
+        if (laCC) for (const k of [...N.loai]) if (S.loai.find(l => l.id === k)?.chuyen_can) N.loai.delete(k);
+        N.loai.add(id);
+      }
+      if (laCC) veLoai(); else t.classList.toggle('on');
+      veTomTat();
     } else if (d.bo) {
       N.hs.delete(+d.bo); veHS(); doiCheDo();
     } else if (d.huy) {
@@ -693,6 +700,20 @@ VIEWS.nhap = function (el) {
     return m;
   }
 
+  /** Học sinh đã có vi phạm chuyên cần trong cùng buổi (sáng < 12 giờ ≤ chiều): hoc_sinh_id → bản ghi đã có */
+  async function timChuyenCan(rows, thoiGian) {
+    const idsCC = S.loai.filter(l => l.chuyen_can).map(l => l.id);
+    const hs = [...new Set(rows.filter(r => r.hoc_sinh_id && idsCC.includes(r.loai_id)).map(r => r.hoc_sinh_id))];
+    const m = new Map();
+    if (!hs.length) return m;
+    const t = thoiGian || new Date().toISOString(), ngay = ngayVN(t), b = buoiCC(t);
+    const { data, error } = await sb.from('v_vi_pham').select('id,hoc_sinh_id,lop_id,loai_id,thoi_gian,nguoi_ghi,ten_nguoi_ghi,ho_ten,ten_lop,ten_vi_pham')
+      .gte('thoi_gian', tuNgay(ngay)).lt('thoi_gian', denNgay(ngay)).in('loai_id', idsCC).in('hoc_sinh_id', hs).order('thoi_gian');
+    if (error) { console.warn('Không kiểm tra được chuyên cần:', error.message); return m; }   // máy chủ vẫn chặn
+    for (const r of data) if (buoiCC(r.thoi_gian) === b && !m.has(r.hoc_sinh_id)) m.set(r.hoc_sinh_id, r);
+    return m;
+  }
+
   $('#btn-ghi').onclick = async () => {
     const cd = cheDo();
     const ghiChu = $('#ghi-chu').value.trim() || null;
@@ -717,14 +738,26 @@ VIEWS.nhap = function (el) {
     if (!rows.length) return;
     const b = $('#btn-ghi'); b.disabled = true; b.textContent = 'Đang kiểm tra…';
 
-    // Kiểm tra trùng trong cùng buổi
+    // Chuyên cần: học sinh đã có vi phạm chuyên cần trong buổi thì không ghi thêm (không có lựa chọn "ghi lần nữa")
     let ghi = rows;
-    const trung = await timTrung(rows, thoiGian);
-    const dsTrung = rows.filter(r => trung.has(khoaTrung(r)));
+    const laCC = r => r.hoc_sinh_id && S.loai.find(l => l.id === r.loai_id)?.chuyen_can;
+    const daCC = await timChuyenCan(rows, thoiGian);
+    const biChan = rows.filter(r => laCC(r) && daCC.has(r.hoc_sinh_id));
+    if (biChan.length) {
+      const conLai = rows.filter(r => !biChan.includes(r));
+      const chon = await baoChuyenCan([...new Set(biChan.map(r => r.hoc_sinh_id))].map(h => daCC.get(h)), conLai.length);
+      if (chon !== 'tiep') { if (conSong()) veTomTat(); return; }
+      ghi = conLai;
+      if (!conSong()) return;
+    }
+
+    // Kiểm tra trùng trong cùng buổi (các vi phạm không thuộc chuyên cần)
+    const trung = await timTrung(ghi, thoiGian);
+    const dsTrung = ghi.filter(r => !laCC(r) && trung.has(khoaTrung(r)));
     if (dsTrung.length) {
-      const chon = await hoiTrung(dsTrung.map(r => trung.get(khoaTrung(r))), rows.length);
+      const chon = await hoiTrung(dsTrung.map(r => trung.get(khoaTrung(r))), ghi.length);
       if (chon === 'huy') { if (conSong()) veTomTat(); return; }
-      if (chon === 'bo_trung') ghi = rows.filter(r => !trung.has(khoaTrung(r)));
+      if (chon === 'bo_trung') ghi = ghi.filter(r => !dsTrung.includes(r));
       if (!ghi.length) { toast('Không ghi nhận thêm vi phạm nào.'); if (conSong()) veTomTat(); return; }
       if (!conSong()) return;
     }
@@ -750,6 +783,29 @@ const BUOI = { sang: 'sáng', chieu: 'chiều', toi: 'ngoài giờ' };
 const buoiCua = ts => { const h = gioVN(ts); return h < 12 ? 'sang' : h < 18 ? 'chieu' : 'toi'; };
 const khoaTrung = r => `${r.hoc_sinh_id ? 'h' + r.hoc_sinh_id : 'l' + r.lop_id}|${r.loai_id}`;
 const gioPhutVN = ts => new Date(ts).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
+
+/** Báo học sinh đã có vi phạm chuyên cần trong buổi. Trả về 'tiep' (bỏ qua các em này, ghi phần còn lại) | 'huy' */
+function baoChuyenCan(dsCu, soConLai) {
+  return new Promise(xong => {
+    const nguoi = r => r.nguoi_ghi === S.user?.id ? 'chính thầy cô' : `<b>${esc(r.ten_nguoi_ghi || 'một người khác')}</b>`;
+    const dong = r => `<b>${esc(r.ho_ten)}</b> (${esc(r.ten_lop)}) đã được ${nguoi(r)} ghi <b>“${esc(r.ten_vi_pham)}”</b> lúc <b>${gioPhutVN(r.thoi_gian)}</b> buổi ${tenBuoi(buoiCC(r.thoi_gian))} ngày ${vn(ngayVN(r.thoi_gian))}`;
+    moModal(`<h2>Không thể ghi thêm vi phạm chuyên cần</h2>
+      ${dsCu.length === 1 ? `<p>${dong(dsCu[0])}.</p>` : `<ul class="ds-trung">${dsCu.map(r => `<li>${dong(r)}</li>`).join('')}</ul>`}
+      <p class="small">Trong một buổi, mỗi học sinh chỉ được ghi <b>một</b> vi phạm chuyên cần (nghỉ có phép, nghỉ không phép hoặc cúp tiết).
+      Nếu đã ghi nhầm, nhờ Ban giám hiệu xóa vi phạm cũ ở mục Xử lý rồi ghi lại.</p>
+      <div class="modal-actions wrap-actions"><span class="sp"></span>
+        ${soConLai ? `<button type="button" class="btn" data-chon="huy">Hủy</button>
+          <button type="button" class="btn primary" data-chon="tiep">Bỏ qua ${dsCu.length === 1 ? 'em này' : 'các em này'}, ghi ${soConLai} mục còn lại</button>`
+          : '<button type="button" class="btn primary" data-chon="huy">Đã hiểu</button>'}
+      </div>`);
+    S.choModal = xong;
+    $('#modal-body').onclick = e => {
+      const t = e.target.closest('[data-chon]'); if (!t) return;
+      S.choModal = null; dongModal(); xong(t.dataset.chon);
+    };
+    $('#modal-body [data-chon].primary')?.focus();
+  });
+}
 
 /** Hỏi khi trùng. Trả về 'ghi_het' | 'bo_trung' | 'huy' */
 function hoiTrung(dsCu, tongSo) {

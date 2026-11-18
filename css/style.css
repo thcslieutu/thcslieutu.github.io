@@ -248,6 +248,48 @@ em.flat { color: var(--muted); font-weight: 500; }
 .canh-bao-do ul { margin: 4px 0; padding-left: 20px; }
 .canh-bao-do p { margin: 4px 0; }
 
+/* ---------- Đảng viên – khảo sát ---------- */
+.dv-dot { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 12px 0; background: #fff; }
+.dv-dot.da-nop { border-color: #bfe3cc; background: #fbfefc; }
+.dv-dot h3 { margin: 0; }
+.dv-dot p { margin: 6px 0 10px; }
+.dv-hd { white-space: pre-line; background: var(--bg); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; }
+.dv-da-nop { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px; }
+.ds-chon { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: #fafbfc; max-height: 300px; overflow: auto; margin-top: 8px; }
+.dv-dong summary { cursor: pointer; color: var(--muted); margin: 14px 0 4px; }
+.dv-ds { margin: 8px 0; padding-left: 22px; }
+.dv-ds li { margin: 3px 0; }
+.mc-nho { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.mc-nho button { border: 0; background: none; padding: 0; cursor: zoom-in; border-radius: 8px; }
+.mc-nho img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); display: block; }
+.mc-nho button:hover img { border-color: var(--pri); }
+.mc-nho.lon { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+.mc-nho.lon img { width: 100%; height: 190px; object-fit: cover; object-position: top; }
+/* Lưới bài nộp (quản lý) */
+.mc-luoi { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.mc-the { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+.mc-the.tre { border-color: #f0d6b0; }
+.mc-gc { background: var(--bg); border-radius: 8px; padding: 6px 8px; white-space: pre-line; }
+/* Trình xem ảnh lớn */
+.mcx-khung { position: relative; display: grid; place-items: center; background: #10161c; border-radius: 10px; min-height: 300px; margin-top: 10px; }
+.mcx-khung img { max-width: 100%; max-height: 72vh; object-fit: contain; display: block; }
+.mcx-nut { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255, 255, 255, .85); color: #1c2630; font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
+#mcx-truoc { left: 10px; } #mcx-sau { right: 10px; }
+.mcx-nut:hover { background: #fff; }
+a.btn { text-decoration: none; }
+@media (max-width: 760px) { .mc-luoi { grid-template-columns: 1fr; } .mc-nho.lon img { height: 150px; } }
+.mc-chon { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 4px; }
+.mc-xem { display: flex; gap: 10px; flex-wrap: wrap; }
+.mc-xem:empty { display: none; }
+.mc-thumb { position: relative; width: 104px; height: 104px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--bg); }
+.mc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mc-thumb button { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .6); color: #fff; font-size: 17px; line-height: 1; cursor: pointer; }
+.tien-do-nho { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.tien-do-nho > div { flex: 1; height: 8px; background: var(--bg); border-radius: 6px; overflow: hidden; }
+.tien-do-nho i { display: block; height: 100%; background: var(--ok); }
+.tien-do-nho span { font-size: 12.5px; white-space: nowrap; color: var(--muted); }
+.chu-cam { color: var(--warn); }
+
 /* ---------- Modal, toast ---------- */
 .modal { position: fixed; inset: 0; background: rgba(16, 28, 40, .45); z-index: 50; display: grid; place-items: center; padding: 16px; }
 .modal-box { background: var(--card); border-radius: 14px; width: 100%; max-width: 720px; max-height: 90vh; overflow: auto; padding: 22px; box-shadow: 0 12px 40px rgba(0, 0, 0, .2); }

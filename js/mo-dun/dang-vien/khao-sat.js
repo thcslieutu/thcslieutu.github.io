@@ -10,6 +10,27 @@ const linkAnToan = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u)
 const loiChuaCaiDV = e => /ks_dot|ks_nop|minh-chung|Bucket not found|does not exist|schema cache/i.test(e?.message || '');
 const MSG_CHUA_CAI = 'Chưa cài phân hệ Đảng viên: hãy chạy file supabase/30-dang-vien.sql trên Supabase.';
 
+/* ---------- Tệp minh chứng: ảnh (nén trên máy) hoặc PDF, Word, Excel, PowerPoint ---------- */
+const MC_TOI_DA = 3;                        // tối đa 3 tệp mỗi đợt
+const MC_DUNG_LUONG = 5 * 1024 * 1024;      // tệp không phải ảnh: tối đa 5 MB (khớp kho "minh-chung" trong SQL)
+const MC_LOAI_TEP = {                       // đuôi tệp → kiểu tệp (khớp danh sách cho phép trong supabase/30-dang-vien.sql)
+  pdf: 'application/pdf',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+};
+const MC_CHAP_NHAN = 'image/*,' + Object.keys(MC_LOAI_TEP).map(d => '.' + d).join(',');
+const duoiTep = ten => (String(ten).match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase();
+/** Đường dẫn trong kho là ảnh (hiện ngay, xem lớn) hay tệp (bấm để mở / tải về) */
+const laAnhMC = p => /\.(jpe?g|png|webp)$/i.test(p);
+/** Tên hiển thị của tệp: phần sau "__" trong đường dẫn (vd …/1712345abc__Bao-cao.pdf → Bao-cao.pdf) */
+const tenTepMC = p => { const t = String(p).split('/').pop(); return t.includes('__') ? t.slice(t.indexOf('__') + 2) : t; };
+/** Tên tệp an toàn cho kho lưu trữ: bỏ dấu, chỉ giữ chữ, số, gạch ngang */
+const tenAnToan = ten => String(ten).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
+  .replace(/\.[^.]*$/, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'tep';
+const oTepMC = p => `<a class="mc-tep" data-mc-tep="${esc(p)}" target="_blank" rel="noopener" title="Bấm để mở / tải về">
+  <span class="mc-tep-loai mc-tep-${duoiTep(p)}">${esc(duoiTep(p).toUpperCase() || 'TỆP')}</span><span class="mc-tep-ten">${esc(tenTepMC(p))}</span></a>`;
+
 /** Nén ảnh trên máy: cạnh dài tối đa 1600px, JPEG ~350 KB */
 async function nenAnh(file, maxCanh = 1600, toiDa = 350e3) {
   let nguon, url;
@@ -42,11 +63,13 @@ async function urlAnh(paths) {
   }
   return paths.map(p => URL_MC.get(p)?.url || '');
 }
-/** Gắn ảnh vào các <img data-mc="đường dẫn"> trong vùng goc */
+/** Gắn đường dẫn tạm vào các <img data-mc> (ảnh) và <a data-mc-tep> (tệp) trong vùng goc */
 async function ganAnhMC(goc) {
-  const imgs = $$('img[data-mc]', goc); if (!imgs.length) return;
-  const urls = await urlAnh(imgs.map(i => i.dataset.mc));
+  const imgs = $$('img[data-mc]', goc), teps = $$('a[data-mc-tep]', goc);
+  if (!imgs.length && !teps.length) return;
+  const urls = await urlAnh([...imgs.map(i => i.dataset.mc), ...teps.map(a => a.dataset.mcTep)]);
   imgs.forEach((i, k) => { if (urls[k]) i.src = urls[k]; else i.alt = 'Không tải được ảnh'; });
+  teps.forEach((a, k) => { const u = urls[imgs.length + k]; if (u) a.href = u; else a.classList.add('loi'); });
 }
 /** Xem ảnh cỡ lớn, chuyển ảnh trước / sau (nút ‹ ›, phím ← →, vuốt trên điện thoại).
     ds: [{ p: đường dẫn, t: tiêu đề }], i: ảnh mở đầu tiên */
@@ -82,9 +105,12 @@ function xemAnhMC(ds, i = 0) {
   k.addEventListener('touchend', e => { if (x0 == null) return; const d = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(d) > 50) { i += d < 0 ? 1 : -1; ve(); } });
   ve();
 }
-/** Ảnh minh chứng hiện ngay trên trang; bấm vào ảnh để xem lớn (lướt qua mọi ảnh trong vùng đang xem) */
-const oAnhNho = (paths, tieuDe, lon = false) => (paths || []).length
-  ? `<div class="mc-nho ${lon ? 'lon' : ''}">${paths.map(p => `<button type="button" data-mc-xem title="Bấm để xem lớn"><img data-mc="${esc(p)}" data-tieu-de="${esc(tieuDe || '')}" alt="Ảnh minh chứng" loading="lazy"></button>`).join('')}</div>` : '';
+/** Minh chứng hiện ngay trên trang: ảnh (bấm để xem lớn, lướt qua mọi ảnh trong vùng) và tệp (bấm để mở / tải về) */
+const oAnhNho = (paths, tieuDe, lon = false) => {
+  const anh = (paths || []).filter(laAnhMC), tep = (paths || []).filter(p => !laAnhMC(p));
+  return (anh.length ? oAnhLuoi(anh, tieuDe, lon) : '') + (tep.length ? `<div class="mc-tep-ds">${tep.map(oTepMC).join('')}</div>` : '');
+};
+const oAnhLuoi = (paths, tieuDe, lon) => `<div class="mc-nho ${lon ? 'lon' : ''}">${paths.map(p => `<button type="button" data-mc-xem title="Bấm để xem lớn"><img data-mc="${esc(p)}" data-tieu-de="${esc(tieuDe || '')}" alt="Ảnh minh chứng" loading="lazy"></button>`).join('')}</div>`;
 /** Bấm vào một ảnh: mở trình xem với mọi ảnh trong vùng goc */
 function moAnhTrongVung(nut, goc) {
   const imgs = $$('[data-mc-xem] img', goc);
@@ -157,13 +183,13 @@ async function dvCuaToi(than, conSong) {
       : d.han_chot && new Date(d.han_chot) < Date.now() ? '<span class="tt tt-chua_xu_ly">Quá hạn – chưa nộp</span>' : '<span class="tt tt-dang_xu_ly">Chưa nộp</span>';
     return `<div class="dv-dot ${n ? 'da-nop' : ''}">
       <div class="head-row"><h3>${esc(d.ten)}</h3>${tt}</div>
-      <p class="small">${hanChot(d)} · Cần ${d.so_anh} ảnh minh chứng${d.dang_mo ? '' : ' · <b>Đợt đã đóng</b>'}</p>
+      <p class="small">${hanChot(d)} · Cần ${d.so_anh} tệp minh chứng (ảnh, PDF, Word…)${d.dang_mo ? '' : ' · <b>Đợt đã đóng</b>'}</p>
       ${d.huong_dan ? `<div class="dv-hd small">${esc(d.huong_dan)}</div>` : ''}
       <div class="row-gap wrap">
         ${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">🔗 Mở link khảo sát</a>` : ''}
         ${d.dang_mo ? `<button type="button" class="btn ${n ? '' : 'primary'}" data-nop="${d.id}">${n ? '✏️ Sửa minh chứng' : '📷 Nộp minh chứng'}</button>` : ''}
       </div>
-      ${n ? `<div class="dv-da-nop">${n.anh_da_xoa ? '<span class="muted small">Ảnh đã được lưu trữ.</span>' : oAnhNho(n.anh, d.ten)}
+      ${n ? `<div class="dv-da-nop">${n.anh_da_xoa ? '<span class="muted small">Minh chứng đã được lưu trữ.</span>' : oAnhNho(n.anh, d.ten)}
         <span class="small muted">Nộp lúc ${fmtTG(n.nop_luc)}${n.sua_luc ? ` · sửa lúc ${fmtTG(n.sua_luc)}` : ''}${n.ghi_chu ? ` · ${esc(n.ghi_chu)}` : ''}</span></div>` : ''}
     </div>`;
   };
@@ -178,37 +204,45 @@ async function dvCuaToi(than, conSong) {
   };
 }
 
-/** Hộp nộp / sửa minh chứng */
+/** Hộp nộp / sửa minh chứng: 1–3 tệp (ảnh được nén trên máy; PDF, Word, Excel, PowerPoint tối đa 5 MB) */
 function moNopMC(dot, nopCu, xong) {
-  let cu = nopCu && !nopCu.anh_da_xoa ? [...nopCu.anh] : [];   // ảnh đã nộp giữ lại
-  let moi = [];                                                // [{ blob, url }]
+  let cu = nopCu && !nopCu.anh_da_xoa ? [...nopCu.anh] : [];   // tệp đã nộp giữ lại (đường dẫn trong kho)
+  let moi = [];                                                // [{ blob, url, ten, duoi, laAnh }]
   moModal(`<h2>${nopCu ? 'Sửa minh chứng' : 'Nộp minh chứng'}</h2>
     <p class="small"><b>${esc(dot.ten)}</b><br>${hanChot(dot)}</p>
-    ${linkAnToan(dot.link) ? `<p class="small"><a href="${esc(linkAnToan(dot.link))}" target="_blank" rel="noopener">🔗 Mở link khảo sát</a> – làm xong, chụp màn hình trang xác nhận rồi tải lên.</p>` : ''}
-    <div class="lbl">Ảnh minh chứng <span class="muted small" id="mc-dem"></span></div>
+    ${linkAnToan(dot.link) ? `<p class="small"><a href="${esc(linkAnToan(dot.link))}" target="_blank" rel="noopener">🔗 Mở link khảo sát</a> – làm xong, chụp màn hình trang xác nhận (hoặc lưu tệp) rồi tải lên.</p>` : ''}
+    <div class="lbl">Minh chứng <span class="muted small" id="mc-dem"></span></div>
     <div class="mc-chon"><div class="mc-xem" id="mc-xem"></div>
       <div class="row-gap wrap" id="mc-nut">
         <label class="btn"><input type="file" id="mc-chup" accept="image/*" capture="environment" hidden>📷 Chụp ảnh</label>
-        <label class="btn"><input type="file" id="mc-file" accept="image/*" multiple hidden>🖼️ Chọn ảnh / ảnh chụp màn hình</label>
+        <label class="btn"><input type="file" id="mc-file" accept="${MC_CHAP_NHAN}" multiple hidden>📎 Chọn ảnh hoặc tệp</label>
       </div></div>
+    <p class="muted small">Nhận: ảnh (JPG, PNG…), PDF, Word, Excel, PowerPoint. Tối đa ${MC_TOI_DA} tệp; tệp không phải ảnh tối đa 5 MB.</p>
     <textarea id="mc-gc" class="input" rows="2" placeholder="Ghi chú (không bắt buộc)">${esc(nopCu?.ghi_chu || '')}</textarea>
     <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button>
       <button type="button" class="btn primary" id="mc-nop">${nopCu ? 'Lưu' : 'Nộp'}</button></div>`);
+  const oTepNho = (duoi, ten) => `<span class="mc-tep-loai mc-tep-${esc(duoi)}">${esc(duoi.toUpperCase())}</span><small>${esc(ten)}</small>`;
   const ve = () => {
     const tong = cu.length + moi.length;
-    $('#mc-xem').innerHTML = cu.map((p, i) => `<div class="mc-thumb"><img data-mc="${esc(p)}" alt=""><button type="button" data-bo-cu="${i}" aria-label="Bỏ ảnh">×</button></div>`).join('')
-      + moi.map((a, i) => `<div class="mc-thumb"><img src="${a.url}" alt=""><button type="button" data-bo-moi="${i}" aria-label="Bỏ ảnh">×</button></div>`).join('');
+    $('#mc-xem').innerHTML = cu.map((p, i) => `<div class="mc-thumb ${laAnhMC(p) ? '' : 'mc-thumb-tep'}">${laAnhMC(p) ? `<img data-mc="${esc(p)}" alt="">` : oTepNho(duoiTep(p), tenTepMC(p))}<button type="button" data-bo-cu="${i}" aria-label="Bỏ tệp">×</button></div>`).join('')
+      + moi.map((a, i) => `<div class="mc-thumb ${a.laAnh ? '' : 'mc-thumb-tep'}">${a.laAnh ? `<img src="${a.url}" alt="">` : oTepNho(a.duoi, a.ten)}<button type="button" data-bo-moi="${i}" aria-label="Bỏ tệp">×</button></div>`).join('');
     ganAnhMC($('#mc-xem'));
-    $('#mc-nut').classList.toggle('hidden', tong >= 3);
-    $('#mc-dem').textContent = `(${tong}/3 – cần ít nhất ${dot.so_anh})`;
+    $('#mc-nut').classList.toggle('hidden', tong >= MC_TOI_DA);
+    $('#mc-dem').textContent = `(${tong}/${MC_TOI_DA} – cần ít nhất ${dot.so_anh})`;
     $('#mc-nop').disabled = tong < dot.so_anh;
   };
   const them = async files => {
-    const ds = [...files].slice(0, 3 - cu.length - moi.length);
-    if (files.length > ds.length) toast('Mỗi đợt tối đa 3 ảnh.', 'err');
+    const ds = [...files].slice(0, MC_TOI_DA - cu.length - moi.length);
+    if (files.length > ds.length) toast(`Mỗi đợt tối đa ${MC_TOI_DA} tệp.`, 'err');
     for (const f of ds) {
-      try { const blob = await nenAnh(f); moi.push({ blob, url: URL.createObjectURL(blob) }); }
-      catch (e) { toast(e.message || 'Không đọc được ảnh.', 'err'); }
+      const duoi = duoiTep(f.name);
+      if (MC_LOAI_TEP[duoi]) {                                   // PDF, Word, Excel, PowerPoint: tải nguyên tệp
+        if (f.size > MC_DUNG_LUONG) { toast(`“${f.name}” lớn hơn 5 MB. Hãy nén hoặc lưu lại nhỏ hơn.`, 'err'); continue; }
+        moi.push({ blob: f, ten: f.name, duoi, laAnh: false });
+      } else if ((f.type || '').startsWith('image/') || /^(jpe?g|png|webp|gif|bmp|heic|heif)$/.test(duoi)) {
+        try { const blob = await nenAnh(f); moi.push({ blob, url: URL.createObjectURL(blob), ten: f.name, duoi: 'jpg', laAnh: true }); }
+        catch (e) { toast(e.message || 'Không đọc được ảnh.', 'err'); }
+      } else toast(`Không nhận loại tệp “${f.name}”. Chỉ nhận ảnh, PDF, Word, Excel, PowerPoint.`, 'err');
     }
     if ($('#mc-xem')) ve();
   };
@@ -217,16 +251,19 @@ function moNopMC(dot, nopCu, xong) {
   $('#modal-body').onclick = e => {
     const a = e.target.closest('[data-bo-cu]'), b = e.target.closest('[data-bo-moi]');
     if (a) { cu.splice(+a.dataset.boCu, 1); ve(); }
-    if (b) { URL.revokeObjectURL(moi[+b.dataset.boMoi].url); moi.splice(+b.dataset.boMoi, 1); ve(); }
+    if (b) { const x = moi[+b.dataset.boMoi]; if (x.url) URL.revokeObjectURL(x.url); moi.splice(+b.dataset.boMoi, 1); ve(); }
   };
   $('#mc-nop').onclick = async () => {
-    const btn = $('#mc-nop'); btn.disabled = true; btn.textContent = 'Đang tải ảnh…';
+    const btn = $('#mc-nop'); btn.disabled = true;
     const daTai = [];
     try {
-      for (const a of moi) {
-        const path = `${S.user.id}/${dot.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-        const { error } = await sb.storage.from(KHO_MC).upload(path, a.blob, { contentType: 'image/jpeg', upsert: false });
-        if (error) throw error;
+      for (const [k, a] of moi.entries()) {
+        btn.textContent = `Đang tải lên ${k + 1}/${moi.length}…`;
+        const ma = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+        const path = a.laAnh ? `${S.user.id}/${dot.id}/${ma}.jpg` : `${S.user.id}/${dot.id}/${ma}__${tenAnToan(a.ten)}.${a.duoi}`;
+        const { error } = await sb.storage.from(KHO_MC).upload(path, a.blob, { contentType: a.laAnh ? 'image/jpeg' : MC_LOAI_TEP[a.duoi], upsert: false });
+        if (error) throw /mime|type|not allowed|exceed|size|too large|payload/i.test(error.message || '')
+          ? new Error(`Máy chủ chưa nhận tệp “${a.ten}”. Quản trị cần chạy lại file supabase/30-dang-vien.sql (bản mới) để cho phép tải PDF, Word, Excel.`) : error;
         daTai.push(path);
       }
       btn.textContent = 'Đang lưu…';
@@ -241,7 +278,7 @@ function moNopMC(dot, nopCu, xong) {
       toast(loiChuaCaiDV(e) ? MSG_CHUA_CAI : dichLoi(e), 'err');
       btn.disabled = false; btn.textContent = nopCu ? 'Lưu' : 'Nộp'; return;
     }
-    moi.forEach(a => URL.revokeObjectURL(a.url));
+    moi.forEach(a => a.url && URL.revokeObjectURL(a.url));
     toast(nopCu ? 'Đã lưu minh chứng.' : 'Đã nộp minh chứng. Cảm ơn đồng chí!');
     dongModal(); await xong();
   };
@@ -268,7 +305,7 @@ async function dvDanhSachDot(than, conSong) {
   const { dots, dsGiao, nopTheoDot } = await layDuLieuQL();
   if (!conSong()) return;
   const soDV = ds_DangVien().length;
-  than.innerHTML = `<div class="head-row"><p class="muted small" style="margin:0">${soDV} đảng viên (tick quyền “Là đảng viên” ở Quản trị → Tài khoản). Bấm tên đợt để xem chi tiết, người chưa nộp, ảnh minh chứng.</p>
+  than.innerHTML = `<div class="head-row"><p class="muted small" style="margin:0">${soDV} đảng viên (tick quyền “Là đảng viên” ở Quản trị → Tài khoản). Bấm tên đợt để xem chi tiết, người chưa nộp, minh chứng.</p>
       <button type="button" class="btn primary" id="dv-tao">+ Tạo đợt khảo sát</button></div>
     ${dots.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Đợt khảo sát</th><th>Hạn chót</th><th>Đối tượng</th><th>Đã nộp</th><th>Trạng thái</th></tr></thead><tbody>
       ${dots.map(d => {
@@ -297,7 +334,7 @@ function moSuaDot(dot, dsGiao, xong, nhanBan = false) {
     <label class="lbl">Hướng dẫn<textarea class="input" id="kd-hd" rows="3" placeholder="Nội dung cần làm, chụp màn hình nào…">${esc(dot?.huong_dan || '')}</textarea></label>
     <div class="grid2 khong-le">
       <label class="lbl">Hạn chót<input type="datetime-local" class="input" id="kd-han" value="${dt}"></label>
-      <label class="lbl">Số ảnh minh chứng tối thiểu<select class="input" id="kd-anh">${[1, 2, 3].map(k => `<option value="${k}" ${(dot?.so_anh || 1) === k ? 'selected' : ''}>${k} ảnh</option>`).join('')}</select></label>
+      <label class="lbl">Số tệp minh chứng tối thiểu (ảnh, PDF, Word…)<select class="input" id="kd-anh">${[1, 2, 3].map(k => `<option value="${k}" ${(dot?.so_anh || 1) === k ? 'selected' : ''}>${k} tệp</option>`).join('')}</select></label>
     </div>
     <div class="lbl">Đối tượng</div>
     <div class="radio-row"><label class="radio"><input type="radio" name="kd-dt" value="tat_ca" ${dot?.doi_tuong !== 'chon' ? 'checked' : ''}> Tất cả đảng viên (${ds.length})</label>
@@ -353,7 +390,7 @@ async function dvChiTietDot(than, conSong, dotId) {
         <button type="button" class="btn sm" id="dv-nhan">Nhân bản</button>
         <button type="button" class="btn sm" id="dv-dong">${d.dang_mo ? 'Đóng đợt' : 'Mở lại'}</button>
         <button type="button" class="btn sm danger" id="dv-xoa">Xóa đợt</button></div></div>
-    <p class="small">${hanChot(d)} · Cần ${d.so_anh} ảnh · ${d.doi_tuong === 'tat_ca' ? 'Tất cả đảng viên' : `${ng.length} đồng chí được chọn`}${link ? ` · <a href="${esc(link)}" target="_blank" rel="noopener">Link khảo sát ↗</a>` : ''}</p>
+    <p class="small">${hanChot(d)} · Cần ${d.so_anh} tệp · ${d.doi_tuong === 'tat_ca' ? 'Tất cả đảng viên' : `${ng.length} đồng chí được chọn`}${link ? ` · <a href="${esc(link)}" target="_blank" rel="noopener">Link khảo sát ↗</a>` : ''}</p>
     ${d.huong_dan ? `<div class="dv-hd small">${esc(d.huong_dan)}</div>` : ''}
     <div class="kpis">
       <div class="kpi"><span>Đã nộp</span><b>${daNop.length}<small class="kpi-phu"> / ${ng.length}</small></b><small>${ng.length ? Math.round(daNop.length / ng.length * 100) : 0}% hoàn thành</small></div>
@@ -366,14 +403,14 @@ async function dvChiTietDot(than, conSong, dotId) {
         ${chuaNop.length ? `<ol class="dv-ds">${chuaNop.map(u => `<li>${esc(u.ho_ten || u.email)} <span class="muted small">${CHUC_VU[u.chuc_vu] || ''}</span></li>`).join('')}</ol>` : '<p class="muted">Tất cả đã nộp. 🎉</p>'}</div>
       <div><div class="head-row"><h3 style="margin:0">Khác</h3></div>
         <div class="row-gap wrap"><button type="button" class="btn sm" id="dv-csv">Xuất danh sách (CSV)</button>
-          <button type="button" class="btn sm danger" id="dv-don" ${coAnh.length ? '' : 'disabled'}>Dọn ảnh (giải phóng dung lượng)</button></div>
-        <p class="muted small">“Dọn ảnh” xóa ảnh khỏi máy chủ nhưng vẫn giữ kết quả ai đã nộp, nộp lúc nào. Chỉ nên dọn khi không cần xem lại ảnh nữa (vd: hết năm).</p></div>
+          <button type="button" class="btn sm danger" id="dv-don" ${coAnh.length ? '' : 'disabled'}>Dọn tệp minh chứng (giải phóng dung lượng)</button></div>
+        <p class="muted small">“Dọn tệp” xóa ảnh và tệp minh chứng khỏi máy chủ nhưng vẫn giữ kết quả ai đã nộp, nộp lúc nào. Chỉ nên dọn khi không cần xem lại nữa (vd: hết năm).</p></div>
     </div>
-    <div class="head-row"><h3 style="margin:0">Đã nộp (${daNop.length})</h3>${coAnh.length ? '<span class="muted small">Bấm vào ảnh để xem lớn; dùng nút ‹ › hoặc phím ← → để xem lần lượt từng người.</span>' : ''}</div>
+    <div class="head-row"><h3 style="margin:0">Đã nộp (${daNop.length})</h3>${coAnh.length ? '<span class="muted small">Bấm vào ảnh để xem lớn (nút ‹ › hoặc phím ← → để xem lần lượt từng người); bấm vào tệp PDF, Word… để mở hoặc tải về.</span>' : ''}</div>
     ${daNop.length ? `<div class="mc-luoi">${daNop.map((x, i) => `<div class="mc-the ${treHan(d, x.n) ? 'tre' : ''}">
         <div class="mc-the-dau"><b>${i + 1}. ${esc(x.u.ho_ten || x.u.email)}</b>${treHan(d, x.n) ? ' <span class="nang">Trễ</span>' : ''}
           <div class="muted small">${CHUC_VU[x.u.chuc_vu] || ''} · nộp ${fmtGio(x.n.nop_luc)}${x.n.sua_luc ? ` · sửa ${fmtGio(x.n.sua_luc)}` : ''}</div></div>
-        ${x.n.anh_da_xoa ? '<p class="muted small">Ảnh đã được dọn.</p>' : oAnhNho(x.n.anh, `${x.u.ho_ten || x.u.email} – ${d.ten}`, true)}
+        ${x.n.anh_da_xoa ? '<p class="muted small">Minh chứng đã được dọn.</p>' : oAnhNho(x.n.anh, `${x.u.ho_ten || x.u.email} – ${d.ten}`, true)}
         ${x.n.ghi_chu ? `<div class="small mc-gc">${esc(x.n.ghi_chu)}</div>` : ''}</div>`).join('')}</div>` : '<p class="muted">Chưa có ai nộp.</p>'}`;
   ganAnhMC(than);
   const lamMoi = () => { if (conSong()) dvChiTietDot(than, conSong, dotId); };
@@ -388,7 +425,7 @@ async function dvChiTietDot(than, conSong, dotId) {
       const r = await sb.from('ks_dot').update({ dang_mo: !dangMo }).eq('id', d.id);
       if (r.error) toast(dichLoi(r.error), 'err'); else { toast(dangMo ? 'Đã đóng đợt.' : 'Đã mở lại đợt.'); lamMoi(); }
     } else if (id === 'dv-xoa') {
-      if (!confirm(`Xóa đợt “${d.ten}” cùng ${daNop.length} bài nộp và toàn bộ ảnh minh chứng? Không thể hoàn tác.`)) return;
+      if (!confirm(`Xóa đợt “${d.ten}” cùng ${daNop.length} bài nộp và toàn bộ minh chứng? Không thể hoàn tác.`)) return;
       const anh = daNop.flatMap(x => x.n.anh_da_xoa ? [] : x.n.anh);
       for (let i = 0; i < anh.length; i += 100) await sb.storage.from(KHO_MC).remove(anh.slice(i, i + 100));
       const r = await sb.from('ks_dot').delete().eq('id', d.id);
@@ -399,14 +436,14 @@ async function dvChiTietDot(than, conSong, dotId) {
       try { await navigator.clipboard.writeText(txt); toast('Đã sao chép. Mở Zalo và dán (Ctrl+V).'); }
       catch { moModal(`<h2>Sao chép danh sách</h2><textarea class="input mono" rows="12" id="dv-txt">${esc(txt)}</textarea><div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Đóng</button></div>`); $('#dv-txt').select(); }
     } else if (id === 'dv-csv') {
-      xuatCSV(`khao-sat_${boDau(d.ten).replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.csv`, ['Đảng viên', 'Email', 'Vai trò', 'Trạng thái', 'Nộp lúc', 'Trễ hạn', 'Số ảnh', 'Ghi chú'],
+      xuatCSV(`khao-sat_${boDau(d.ten).replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.csv`, ['Đảng viên', 'Email', 'Vai trò', 'Trạng thái', 'Nộp lúc', 'Trễ hạn', 'Số tệp', 'Ghi chú'],
         ng.map(u => { const n = nop.get(u.id); return [u.ho_ten, u.email, CHUC_VU[u.chuc_vu], n ? 'Đã nộp' : 'Chưa nộp', n ? fmtTG(n.nop_luc) : '', n && treHan(d, n) ? 'Trễ' : '', n ? (n.anh_da_xoa ? 'đã dọn' : n.anh.length) : '', n?.ghi_chu || '']; }));
     } else if (id === 'dv-don') {
-      if (!confirm(`Dọn ${coAnh.reduce((s, x) => s + x.n.anh.length, 0)} ảnh minh chứng của đợt này khỏi máy chủ?\n\nKết quả (ai đã nộp, nộp lúc nào) vẫn được giữ, nhưng sẽ không xem lại được ảnh. Không thể hoàn tác.`)) return;
+      if (!confirm(`Dọn ${coAnh.reduce((s, x) => s + x.n.anh.length, 0)} tệp minh chứng của đợt này khỏi máy chủ?\n\nKết quả (ai đã nộp, nộp lúc nào) vẫn được giữ, nhưng sẽ không xem lại được minh chứng. Không thể hoàn tác.`)) return;
       const anh = coAnh.flatMap(x => x.n.anh);
       for (let i = 0; i < anh.length; i += 100) { const r = await sb.storage.from(KHO_MC).remove(anh.slice(i, i + 100)); if (r.error) { toast(dichLoi(r.error), 'err'); return; } }
       const r = await sb.from('ks_nop').update({ anh: [], anh_da_xoa: true }).in('id', coAnh.map(x => x.n.id));
-      if (r.error) toast(dichLoi(r.error), 'err'); else { toast('Đã dọn ảnh, giữ nguyên kết quả.'); lamMoi(); }
+      if (r.error) toast(dichLoi(r.error), 'err'); else { toast('Đã dọn minh chứng, giữ nguyên kết quả.'); lamMoi(); }
     }
   };
 }
@@ -440,4 +477,3 @@ async function dvTongHop(than, conSong) {
       bang.map(x => [x.u.ho_ten, x.u.email, x.giao, x.nop, x.dung, x.tre, x.giao ? Math.round(x.nop / x.giao * 100) : '', x.chua.map(d => d.ten).join('; ')]));
   };
 }
-

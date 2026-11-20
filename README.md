@@ -1,94 +1,109 @@
-# Phần mềm Quản lý vi phạm học sinh (phiên bản 2)
+# Ứng dụng quản lý nhà trường – Trường THCS Liêu Tú
 
 Ứng dụng web chạy trên **GitHub Pages**, dữ liệu lưu trên **Supabase**.
-Viết bằng **HTML + CSS + JavaScript thuần** (không cần cài đặt hay build) — chỉ cần tải file lên là chạy.
+Viết bằng **HTML + CSS + JavaScript thuần**: không cần cài đặt hay build, chỉ cần tải file lên là chạy.
 
 Tác giả: **Lâm Hòa Văn** – SĐT 0977.364.202 – Giáo viên Trường THCS Liêu Tú.
 
-## Chức năng
+## Cấu trúc: nền tảng + các phân hệ
 
-| Mục | Ai dùng | Nội dung |
+Ứng dụng gồm một **nền tảng** dùng chung và nhiều **phân hệ**. Mỗi phân hệ nằm riêng:
+- 1 file SQL trong `supabase/`;
+- 1 thư mục JS trong `js/mo-dun/`;
+- (nếu cần) 1 file CSS trong `css/mo-dun/`.
+
+Thêm chức năng mới = thêm một phân hệ, **không phải sửa phần đã có**. Xem `HUONG-DAN-THEM-PHAN-HE.md`.
+
+```
+index.html                      Khung trang + danh sách file của các phân hệ
+js/config.js                    Địa chỉ Supabase, tên trường, logo, tác giả
+js/nen-tang/                    NỀN TẢNG
+  tien-ich.js                     ngày giờ, định dạng, thông báo, hộp thoại, xuất CSV
+  giao-dien.js                    chụp ảnh trang, in/PDF, khoảng thống kê, biểu đồ
+  ung-dung.js                     đăng nhập, phân quyền, dữ liệu chung, menu, chọn phân hệ
+js/mo-dun/vi-pham/              PHÂN HỆ VI PHẠM
+js/mo-dun/chuyen-can/           PHÂN HỆ CHUYÊN CẦN
+js/mo-dun/dang-vien/            PHÂN HỆ ĐẢNG VIÊN
+js/mo-dun/quan-tri/             PHÂN HỆ QUẢN TRỊ (học sinh, tài khoản, cấu hình, dữ liệu)
+js/khoi-dong.js                 Khởi động (luôn nạp cuối cùng)
+css/nen-tang.css, css/mo-dun/   Giao diện
+supabase/00-nen-tang.sql        Cơ sở dữ liệu nền tảng (chạy đầu tiên)
+supabase/10-vi-pham.sql         … phân hệ Vi phạm
+supabase/20-chuyen-can.sql      … phân hệ Chuyên cần (cần Vi phạm)
+supabase/30-dang-vien.sql       … phân hệ Đảng viên
+```
+
+## Các phân hệ
+
+Sau khi đăng nhập, người dùng chọn **phân hệ**; menu chỉ hiện các mục của phân hệ đó. Người chỉ có một phân hệ được vào thẳng.
+
+| Phân hệ | Mục | Nội dung |
 |---|---|---|
-| **Nhập vi phạm** | Mọi người | Chọn lớp → (chọn học sinh) → chọn vi phạm → **Ghi nhận**. Chưa chọn học sinh: chỉ chọn được **vi phạm của lớp** (ghi cho cả lớp). Đã chọn học sinh: chỉ chọn được **vi phạm của học sinh**. Có thể chọn **ngày giờ vi phạm**; để trống = giờ hiện tại. Hủy được trong 15 phút. |
-| **Xử lý** | GVCN, TPT, BGH xử lý; GV xem | Lọc theo trạng thái, điểm trường, lớp, mức độ, ngày, tên. Xử lý hàng loạt, xuất CSV. |
-| **Thống kê** | Mọi người | Mặc định **Tuần này so với Tuần trước** (có tháng, học kỳ, năm, tùy chọn). Phạm vi toàn trường / điểm trường / lớp. Biểu đồ diễn biến, hình thức, nhóm, mức độ, tình trạng xử lý, thứ trong tuần × buổi, điểm trường, lớp; mục “Cần chú ý”; bảng lớp, học sinh, người ghi nhận. |
-| **Học sinh** | BGH | Điểm trường (không bắt buộc); lớp (điểm trường, GVCN); học sinh; dán danh sách từ Excel. |
-| **Hình thức VP** | BGH | Danh mục hình thức vi phạm (áp dụng cho học sinh / cả lớp, nhóm, mức độ, điểm trừ, bật/tắt) và danh mục **biện pháp xử lý** (tên, nhóm, thứ tự, bật/tắt – **chỉ Quản trị** được sửa, BGH chỉ xem). |
-| **Tài khoản** | Quản trị | Duyệt giáo viên đăng ký, cấp vai trò, gán lớp chủ nhiệm, gán một hoặc nhiều điểm trường cho Tổng phụ trách. |
+| **Vi phạm** | Nhập vi phạm, Xử lý, Thống kê, Danh mục | Ghi vi phạm cho học sinh hoặc cả lớp, chọn ngày giờ. Chống ghi trùng trong buổi. Xử lý theo quyền, có thể xử lý hàng loạt. Thống kê có so sánh kỳ trước, theo lớp / học sinh / loại / điểm trường. Danh mục gồm hình thức vi phạm và biện pháp xử lý. |
+| **Chuyên cần** | Ghi nhận vắng, Báo cáo chuyên cần | Ghi học sinh vắng có phép, không phép, cúp tiết (mỗi buổi một lần). Báo cáo theo buổi hoặc theo khoảng thời gian. Đánh dấu lớp nghỉ. |
+| **Đảng viên** | Khảo sát của tôi, Quản lý đợt, Tổng hợp | Đảng viên nộp 1–3 ảnh minh chứng cho mỗi đợt khảo sát. Người quản lý xem ai chưa nộp, sao chép danh sách gửi Zalo, xem ảnh ngay trên phần mềm, xuất CSV, dọn ảnh. |
+| **Quản trị** | Học sinh, Tài khoản, Cấu hình, Dữ liệu | Quản lý điểm trường – lớp – học sinh (nhập từ Excel). Duyệt tài khoản và phân quyền. Sửa thông số. Sao lưu CSV, xóa dữ liệu. |
 
-## Phân quyền
+## Chức vụ và quyền
 
-| Vai trò | Quyền |
-|---|---|
-| Chờ duyệt | Chưa xem được dữ liệu |
-| Giáo viên | Ghi nhận vi phạm, xem danh sách và thống kê |
-| GV chủ nhiệm | + Xử lý vi phạm mức **Nhẹ, Trung bình** của lớp mình chủ nhiệm |
-| Tổng phụ trách | + Xử lý vi phạm mức **Nhẹ, Trung bình** của các điểm trường được giao (giao được nhiều điểm; không giao = toàn trường) |
-| Ban giám hiệu | Xử lý mọi vi phạm, **kể cả mức Nặng**; quản lý điểm trường, lớp, học sinh, hình thức vi phạm |
-| Quản trị | Toàn quyền, thêm cấp quyền tài khoản |
+Mỗi tài khoản có một **chức vụ** (Giáo viên, Tổng phụ trách, Nhân viên, Ban giám hiệu, Quản trị) và các **quyền** tick theo từng phân hệ (Quản trị → Tài khoản).
 
-Quyền được kiểm tra trên máy chủ (RLS và hàm `co_the_xu_ly()` trong `schema.sql`), không chỉ ẩn nút trên giao diện.
+- Khi duyệt tài khoản, chọn chức vụ thì các quyền thường dùng được tick sẵn. Có thể tick thêm hoặc bỏ bớt.
+- **Quản trị** có mọi quyền, trừ quyền dạng “thành viên” (*Là đảng viên*) phải tick riêng.
+- **GV chủ nhiệm** không cần quyền riêng: người có quyền *Ghi nhận vi phạm* được gán làm GVCN một lớp (Quản trị → Học sinh → Sửa lớp) thì tự được xử lý vi phạm Nhẹ, Trung bình của lớp đó.
+- Quyền *Xử lý vi phạm* có thể giới hạn theo điểm trường (nút **Sửa** dưới ô quyền).
 
-## Nâng cấp từ phiên bản 1 (đang có dữ liệu)
+| Quyền | Phân hệ | Mặc định cho |
+|---|---|---|
+| Ghi nhận vi phạm | Vi phạm | GV, TPT, BGH |
+| Xử lý vi phạm (Nhẹ, TB) | Vi phạm | TPT |
+| Xử lý mọi vi phạm (kể cả Nặng, sửa/xóa) | Vi phạm | BGH |
+| Sửa hình thức vi phạm | Vi phạm | BGH |
+| Sửa biện pháp xử lý | Vi phạm | (chỉ Quản trị) |
+| Dùng phân hệ Chuyên cần | Chuyên cần | GV, TPT, BGH |
+| Là đảng viên | Đảng viên | tick riêng |
+| Quản lý khảo sát | Đảng viên | (chỉ Quản trị) |
+| Quản lý học sinh | Quản trị | BGH |
 
-1. Supabase → **SQL Editor** → **New query** → dán toàn bộ `supabase/schema.sql` mới → **Run**. Dữ liệu cũ được giữ nguyên; mỗi vi phạm cũ được gán lớp hiện tại của học sinh.
-2. Tải các file mới lên GitHub (ghi đè `index.html`, `css/`, `js/`, `supabase/`, `README.md`).
-3. Làm bước **Sửa liên kết xác nhận email** bên dưới.
-4. Vào **Tài khoản** cấp lại vai trò GV chủ nhiệm / Tổng phụ trách, gán lớp chủ nhiệm.
+Mọi quyền được kiểm tra **trên máy chủ** (Row Level Security), không chỉ ẩn nút trên giao diện. Nhân viên chỉ có quyền Đảng viên thì không xem được dữ liệu học sinh.
 
-## Cài mới (khoảng 15 phút)
+## Cài đặt (khoảng 15 phút)
 
-### Bước 1 – Tạo cơ sở dữ liệu Supabase
-1. Vào <https://supabase.com> → **New project** (gói Free là đủ, Region: Singapore).
-2. **SQL Editor** → **New query** → dán toàn bộ `supabase/schema.sql` → **Run**.
+### Bước 1 – Tạo cơ sở dữ liệu
+1. <https://supabase.com> → **New project** (gói Free, Region: Singapore).
+2. **SQL Editor** → **New query** → dán và **Run** lần lượt từng file, **đúng thứ tự**:
+   `00-nen-tang.sql` → `10-vi-pham.sql` → `20-chuyen-can.sql` → `30-dang-vien.sql`.
+   Mỗi file chạy xong hiện dòng “Đã cài …”. Chạy lại nhiều lần vẫn an toàn. Có lỗi thì file tự hủy, không thay đổi gì.
 3. **Project Settings → API**: chép **Project URL** và khóa **anon public** (hoặc *publishable key*).
 
 ### Bước 2 – Cấu hình
-Mở `js/config.js`, điền `SUPABASE_URL`, `SUPABASE_ANON_KEY`, tên trường.
+Mở `js/config.js`, điền `SUPABASE_URL`, `SUPABASE_ANON_KEY`, tên trường. Logo (không bắt buộc): tải ảnh vào thư mục `img/`, ghi `LOGO: 'img/logo.png'`.
 
 ### Bước 3 – Đưa lên GitHub Pages
-1. Repository tên `<tên-github>.github.io` (ví dụ `thcslieutu.github.io`) → trang chạy ở `https://thcslieutu.github.io/`.
-   Repository tên khác (ví dụ `quan-ly-vi-pham`) → trang chạy ở `https://<tên-github>.github.io/quan-ly-vi-pham/`.
-2. **Add file → Upload files** → kéo thả toàn bộ nội dung thư mục → Commit.
-3. **Settings → Pages** → *Deploy from a branch* → `main`, `/ (root)` → Save.
+Repository → **Add file → Upload files** → kéo thả toàn bộ nội dung thư mục (giữ nguyên các thư mục con) → Commit → **Settings → Pages** → `main`, `/ (root)`.
 
-### Bước 4 – Sửa liên kết xác nhận email (tránh trỏ về localhost)
-Mặc định Supabase đặt *Site URL* là `http://localhost:3000`, nên link trong email xác nhận trỏ về localhost. Cách sửa:
+Nên thử trước ở một repository riêng (ví dụ `thu-nghiem` → `https://thcslieutu.github.io/thu-nghiem/`) với một dự án Supabase riêng.
 
-1. Supabase → **Authentication → URL Configuration**.
-2. **Site URL**: `https://thcslieutu.github.io` → **Save**.
-3. **Redirect URLs** → **Add URL**: `https://thcslieutu.github.io/**` → **Save**.
-
-Phần mềm cũng tự gửi kèm địa chỉ trang hiện tại khi đăng ký (`emailRedirectTo`), nhưng Supabase chỉ chấp nhận địa chỉ có trong danh sách Redirect URLs, nên bước trên là bắt buộc. Người đã nhận email cũ (link localhost) cần **đăng ký lại** hoặc nhờ Quản trị xác nhận tay: Supabase → **Authentication → Users** → chọn người dùng → *Confirm email*.
-
-(Nếu muốn giáo viên đăng ký xong dùng ngay, không cần xác nhận email: **Authentication → Sign In / Providers → Email** → tắt *Confirm email*.)
+### Bước 4 – Liên kết trong email (tránh trỏ về localhost)
+Supabase → **Authentication → URL Configuration**:
+- **Site URL**: địa chỉ trang (vd `https://thcslieutu.github.io`).
+- **Redirect URLs**: thêm `https://thcslieutu.github.io/**`.
 
 ### Bước 5 – Sử dụng lần đầu
 1. Mở trang → **Đăng ký**. **Tài khoản đầu tiên tự động là Quản trị.**
-2. **Học sinh**: thêm điểm trường (nếu có), lớp, rồi **Nhập từ Excel** danh sách 2 cột Họ tên – Lớp.
-3. **Hình thức VP**: chỉnh danh mục cho đúng nội quy trường.
-4. Giáo viên tự đăng ký → Quản trị vào **Tài khoản** cấp vai trò, gán lớp chủ nhiệm.
+2. Quản trị → **Học sinh**: thêm điểm trường (nếu có), lớp, **Nhập từ Excel** danh sách 2 cột Họ tên – Lớp.
+3. Vi phạm → **Danh mục**: chỉnh hình thức vi phạm cho đúng nội quy (đã có sẵn mẫu, gồm 3 loại chuyên cần).
+4. Giáo viên, nhân viên tự đăng ký → Quản trị → **Tài khoản**: chọn chức vụ, kiểm tra quyền, **Lưu**.
+5. Quản trị → **Cấu hình**: mốc học kỳ, số giờ được tự hủy vi phạm, số ngày được ghi lùi.
 
 ## Mật khẩu
-- **Đổi mật khẩu**: bấm nút **Mật khẩu** trên thanh trên cùng (cần nhập mật khẩu hiện tại; có thể đăng xuất khỏi các thiết bị khác).
-- **Quên mật khẩu**: ở màn hình đăng nhập bấm **Quên mật khẩu?** → nhập email → mở email, bấm liên kết → đặt mật khẩu mới.
-- **Quản trị** có thể bấm **Gửi link đặt lại MK** cạnh tài khoản giáo viên trong mục Tài khoản.
-- Liên kết trong email chỉ hoạt động khi đã làm **Bước 4 – Redirect URLs** ở trên.
-- Dịch vụ email có sẵn của Supabase chỉ gửi được rất ít email mỗi giờ. Nếu nhiều giáo viên cùng cần, nên cấu hình SMTP riêng: Supabase → **Authentication → Emails → SMTP Settings**.
-- Mật khẩu mới cần ít nhất 8 ký tự. Muốn máy chủ cũng bắt buộc như vậy: **Authentication → Sign In / Providers → Email → Minimum password length** = 8.
+- **Đổi mật khẩu**: nút **Mật khẩu** trên thanh trên cùng.
+- **Quên mật khẩu**: màn hình đăng nhập → **Quên mật khẩu?** → mở email, bấm liên kết.
+- Quản trị có thể bấm **Đặt lại MK** cạnh từng tài khoản.
+- Dịch vụ email có sẵn của Supabase gửi được rất ít email mỗi giờ. Cần nhiều thì cấu hình SMTP riêng (Authentication → Emails → SMTP Settings).
 
 ## Lưu ý
-- Giáo viên được chọn ngày giờ vi phạm lùi tối đa **7 ngày** (BGH, Quản trị không giới hạn). Đổi con số ở `so_ngay_lui` trong `schema.sql` và `SO_NGAY_DUOC_LUI` trong `js/config.js`.
-- Thời điểm bấm Ghi nhận luôn do máy chủ ghi (`tao_luc`), không sửa được từ trình duyệt.
-- Mỗi vi phạm lưu **lớp tại thời điểm ghi**: chuyển lớp cho học sinh không làm thay đổi thống kê cũ.
-- Không xóa được lớp còn học sinh, lớp/học sinh đã có vi phạm. Học sinh nghỉ học hãy bỏ chọn “Đang học”.
-- Dự án Supabase gói Free có thể bị tạm dừng nếu lâu không truy cập (nhất là dịp hè); vào Dashboard bấm *Restore*. Nên định kỳ xuất CSV để lưu trữ.
-
-## Cấu trúc thư mục
-```
-index.html          Giao diện chính
-css/style.css       Định dạng (hỗ trợ điện thoại)
-js/config.js        Cấu hình Supabase, tên trường, mốc học kỳ
-js/app.js           Toàn bộ chức năng
-supabase/schema.sql Tạo bảng / nâng cấp, phân quyền, dữ liệu mẫu
-```
+- Mỗi vi phạm lưu **lớp và điểm trừ tại thời điểm ghi**. Chuyển lớp hay đổi thang điểm không làm thay đổi số liệu cũ.
+- Xóa lớp / học sinh sẽ xóa kèm dữ liệu liên quan (vi phạm, vắng…). Phần mềm báo trước số lượng và yêu cầu xác nhận. Học sinh nghỉ học nên **Đánh dấu đã nghỉ** thay vì xóa.
+- Supabase gói Free có thể tạm dừng nếu lâu không truy cập (nhất là dịp hè). Vào Dashboard bấm *Restore*. Nên sao lưu CSV định kỳ (Quản trị → Dữ liệu).
+- Ảnh minh chứng: gói Free có 1 GB. Mỗi ảnh sau khi nén khoảng 100–300 KB. Có thể **Dọn ảnh** các đợt cũ.

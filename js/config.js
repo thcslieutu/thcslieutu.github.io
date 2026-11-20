@@ -2,28 +2,25 @@
 //  CẤU HÌNH – chỉ cần sửa file này
 //  Lấy 2 giá trị dưới trong Supabase: Project Settings → API
 //  (Project URL và khóa "anon public" / "publishable").
-//  Khóa anon được phép công khai; dữ liệu được bảo vệ bằng RLS.
+//  Khóa anon được phép công khai; dữ liệu được bảo vệ bằng phân quyền (RLS) trên máy chủ.
+//
+//  Các thông số khác (giờ được hủy vi phạm, số ngày được lùi, mốc học kỳ…)
+//  Quản trị sửa ngay trong phần mềm: phân hệ Quản trị → Cấu hình.
 // =============================================================
 window.APP_CONFIG = {
-  SUPABASE_URL: 'https://axodppkfmjjpxmsqafvf.supabase.co',
-  SUPABASE_ANON_KEY: 'sb_publishable_enbD2CQEpPYrnTs0dXuEKA_d-P66sJH',
+  SUPABASE_URL: 'https://etbajyyevkafprnktpje.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_gGPvuf4D3O029aWNim1obw_1biFNEjI',
+
   TEN_TRUONG: 'Trường THCS Liêu Tú',
-  LOGO: 'img/logo.png',
+  TEN_UNG_DUNG: 'Ứng dụng quản lý nhà trường',
 
-  // Năm học: ngày bắt đầu học kỳ (tháng-ngày), dùng cho thống kê
-  HK1_BAT_DAU: '09-07',
-  HK2_BAT_DAU: '01-18',
-  NAM_HOC_KET_THUC: '05-31',
+  // Logo trường (tab trình duyệt, trang đăng nhập, thanh menu, màn hình chính điện thoại).
+  // Tải ảnh vuông (PNG/JPG/SVG, nên 512×512) vào thư mục img/ rồi ghi đường dẫn, vd: 'img/logo.png'.
+  // Để trống '' thì dùng biểu tượng ✓ mặc định.
+  LOGO: '',
 
-  // Người ghi được tự hủy vi phạm vừa nhập trong bao nhiêu phút (khớp với schema.sql)
-  PHUT_DUOC_HUY: 240,
-
-  // Giáo viên được chọn ngày giờ vi phạm lùi về trước tối đa bao nhiêu ngày
-  // (BGH, Quản trị không giới hạn). Khớp với "so_ngay_lui" trong schema.sql
-  SO_NGAY_DUOC_LUI: 7,
-
-  // Thông tin tác giả (hiện ở chân trang trên máy tính)
+  // Thông tin tác giả (hiện ở chân trang trên máy tính). Để trống TAC_GIA: '' thì ẩn chân trang.
   TAC_GIA: 'Lâm Hòa Văn',
   TAC_GIA_SDT: '0977.364.202',
-  TAC_GIA_DON_VI: 'Giáo viên Trường THCS Liêu Tú - Xã Liêu Tú'
+  TAC_GIA_DON_VI: 'Giáo viên Trường THCS Liêu Tú'
 };

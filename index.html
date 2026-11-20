@@ -3,17 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quản lý vi phạm học sinh</title>
+  <title>Ứng dụng quản lý nhà trường</title>
   <meta name="theme-color" content="#0f5f78">
   <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230f5f78'/%3E%3Cpath d='M7 12.5l3 3 7-7' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css">
+  <!-- Giao diện: nền tảng + từng phân hệ -->
+  <link rel="stylesheet" href="css/nen-tang.css">
+  <link rel="stylesheet" href="css/mo-dun/vi-pham.css">
+  <link rel="stylesheet" href="css/mo-dun/dang-vien.css">
 </head>
 <body>
   <!-- Màn hình đăng nhập -->
   <section id="man-dang-nhap" class="login hidden">
     <form id="f-dang-nhap" class="card login-card" autocomplete="on">
       <div class="logo" id="logo-dang-nhap">✓</div>
-      <h1>Quản lý vi phạm học sinh</h1>
+      <h1 class="ten-ung-dung">Ứng dụng quản lý nhà trường</h1>
       <p class="muted center" id="ten-truong-login"></p>
       <p class="ok-msg center hidden" id="login-ok"></p>
       <label class="dk hidden">Họ và tên<input class="input" name="ten" autocomplete="name"></label>
@@ -46,7 +49,7 @@
       <img id="logo-nho" class="logo-nho hidden" alt="">
       <div class="brand">
         <b id="ten-truong"></b>
-        <small>Quản lý vi phạm học sinh</small>
+        <small id="ten-phan-he"></small>
       </div>
       <nav id="nav"></nav>
       <div class="user">
@@ -70,6 +73,35 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="js/config.js"></script>
-  <script src="js/app.js"></script>
+
+  <!-- NỀN TẢNG (bắt buộc, giữ đúng thứ tự) -->
+  <script src="js/nen-tang/tien-ich.js"></script>
+  <script src="js/nen-tang/giao-dien.js"></script>
+  <script src="js/nen-tang/ung-dung.js"></script>
+
+  <!-- CÁC PHÂN HỆ: thêm phân hệ mới = thêm các dòng <script> của phân hệ đó vào đây.
+       Bỏ một phân hệ = xóa các dòng của phân hệ đó. -->
+  <!-- Phân hệ Vi phạm -->
+  <script src="js/mo-dun/vi-pham/chung.js"></script>
+  <script src="js/mo-dun/vi-pham/nhap.js"></script>
+  <script src="js/mo-dun/vi-pham/xu-ly.js"></script>
+  <script src="js/mo-dun/vi-pham/thong-ke.js"></script>
+  <script src="js/mo-dun/vi-pham/danh-muc.js"></script>
+  <script src="js/mo-dun/vi-pham/phan-he.js"></script>
+  <!-- Phân hệ Chuyên cần (cần phân hệ Vi phạm) -->
+  <script src="js/mo-dun/chuyen-can/bao-cao.js"></script>
+  <script src="js/mo-dun/chuyen-can/phan-he.js"></script>
+  <!-- Phân hệ Đảng viên -->
+  <script src="js/mo-dun/dang-vien/khao-sat.js"></script>
+  <script src="js/mo-dun/dang-vien/phan-he.js"></script>
+  <!-- Phân hệ Quản trị -->
+  <script src="js/mo-dun/quan-tri/hoc-sinh.js"></script>
+  <script src="js/mo-dun/quan-tri/tai-khoan.js"></script>
+  <script src="js/mo-dun/quan-tri/cau-hinh.js"></script>
+  <script src="js/mo-dun/quan-tri/du-lieu.js"></script>
+  <script src="js/mo-dun/quan-tri/phan-he.js"></script>
+
+  <!-- Khởi động (luôn để cuối cùng) -->
+  <script src="js/khoi-dong.js"></script>
 </body>
 </html>

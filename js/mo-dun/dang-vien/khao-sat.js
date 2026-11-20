@@ -285,6 +285,87 @@ function moNopMC(dot, nopCu, xong) {
   ve();
 }
 
+/* ---------- Tải minh chứng về máy: mỗi người một file .zip mang tên người đó ---------- */
+let taiJSZip = null;
+/** Nạp thư viện nén JSZip khi cần (lần đầu bấm tải) */
+function canJSZip() {
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  return taiJSZip || (taiJSZip = new Promise((ok, loi) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload = () => (window.JSZip ? ok(window.JSZip) : loi(new Error('Không tải được công cụ nén.')));
+    s.onerror = () => { taiJSZip = null; loi(new Error('Không tải được công cụ nén. Kiểm tra kết nối mạng rồi thử lại.')); };
+    document.head.appendChild(s);
+  }));
+}
+/** Tên file hợp lệ trên Windows / điện thoại (giữ dấu tiếng Việt, bỏ ký tự cấm) */
+const tenFileHopLe = t => String(t || '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '').slice(0, 80) || 'Khong-ten';
+/** Tên người trong danh sách tải (trùng tên thì thêm (2), (3)…) */
+function tenNguoiDuyNhat(ds) {
+  const dem = new Map();
+  return ds.map(x => {
+    const goc = tenFileHopLe(x.u.ho_ten || x.u.email), k = goc.toLowerCase(), n = (dem.get(k) || 0) + 1;
+    dem.set(k, n);
+    return n > 1 ? `${goc} (${n})` : goc;
+  });
+}
+/** Tải các tệp của một bài nộp từ kho, nén thành 1 file .zip (Blob) */
+async function nenBaiNop(JSZip, n) {
+  const urls = await urlAnh(n.anh);
+  const zip = new JSZip(), daDung = new Set();
+  for (const [i, p] of n.anh.entries()) {
+    if (!urls[i]) throw new Error('Không lấy được đường dẫn tệp.');
+    const res = await fetch(urls[i]);
+    if (!res.ok) throw new Error(`Không tải được tệp (${res.status}).`);
+    let ten = tenFileHopLe(laAnhMC(p) ? `Anh ${i + 1}.jpg` : `${i + 1}. ${tenTepMC(p)}`);
+    while (daDung.has(ten.toLowerCase())) ten = '_' + ten;
+    daDung.add(ten.toLowerCase());
+    zip.file(ten, await res.blob(), { date: new Date(n.sua_luc || n.nop_luc) });
+  }
+  if (n.ghi_chu) zip.file('Ghi chu.txt', n.ghi_chu);
+  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+}
+function taiBlob(blob, ten) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = ten;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+/** Tải minh chứng của một hoặc nhiều người.
+    - Một người: tải thẳng file "<Tên người>.zip".
+    - Nhiều người: một file "Minh chứng - <tên đợt>.zip" chứa các file "<Tên người>.zip" (giải nén ra là có từng file của từng người). */
+async function taiMinhChung(d, ds, btn) {
+  const cu = btn.innerHTML; btn.disabled = true;
+  const hien = t => (btn.textContent = t);
+  try {
+    hien('Đang chuẩn bị…');
+    const JSZip = await canJSZip();
+    const ten = tenNguoiDuyNhat(ds);
+    if (ds.length === 1) {
+      hien('Đang tải…');
+      taiBlob(await nenBaiNop(JSZip, ds[0].n), `${ten[0]}.zip`);
+      toast(`Đã tải minh chứng của ${ds[0].u.ho_ten || ds[0].u.email}.`);
+      return;
+    }
+    const goi = new JSZip(), loi = [];
+    for (const [i, x] of ds.entries()) {
+      hien(`Đang tải ${i + 1}/${ds.length}…`);
+      try { goi.file(`${ten[i]}.zip`, await nenBaiNop(JSZip, x.n)); }
+      catch (e) { loi.push(`${x.u.ho_ten || x.u.email}: ${e.message}`); }
+    }
+    if (loi.length === ds.length) throw new Error(loi[0]);
+    if (loi.length) goi.file('KHONG TAI DUOC.txt', 'Các bài nộp không tải được (hãy thử lại):\n' + loi.join('\n'));
+    hien('Đang đóng gói…');
+    const blob = await goi.generateAsync({ type: 'blob', compression: 'STORE' });   // file con đã nén sẵn
+    taiBlob(blob, `Minh chứng - ${tenFileHopLe(d.ten)}.zip`);
+    toast(`Đã tải minh chứng của ${ds.length - loi.length} người.` + (loi.length ? ` ${loi.length} người không tải được (xem file KHONG TAI DUOC.txt).` : ''), loi.length ? 'err' : 'ok');
+  } catch (e) {
+    toast(e.message || 'Không tải được minh chứng.', 'err');
+  } finally {
+    btn.disabled = false; btn.innerHTML = cu;
+  }
+}
+
 /* ---------- Quản lý: dữ liệu chung ---------- */
 async function layDuLieuQL() {
   const [d, g, n] = await Promise.all([
@@ -402,13 +483,15 @@ async function dvChiTietDot(than, conSong, dotId) {
       <div><div class="head-row"><h3 style="margin:0">Chưa nộp (${chuaNop.length})</h3>${chuaNop.length ? '<button type="button" class="btn sm primary" id="dv-chep">📋 Sao chép để gửi Zalo</button>' : ''}</div>
         ${chuaNop.length ? `<ol class="dv-ds">${chuaNop.map(u => `<li>${esc(u.ho_ten || u.email)} <span class="muted small">${CHUC_VU[u.chuc_vu] || ''}</span></li>`).join('')}</ol>` : '<p class="muted">Tất cả đã nộp. 🎉</p>'}</div>
       <div><div class="head-row"><h3 style="margin:0">Khác</h3></div>
-        <div class="row-gap wrap"><button type="button" class="btn sm" id="dv-csv">Xuất danh sách (CSV)</button>
+        <div class="row-gap wrap"><button type="button" class="btn sm primary" id="dv-tai" ${coAnh.length ? '' : 'disabled'}>⬇️ Tải tất cả minh chứng</button>
+          <button type="button" class="btn sm" id="dv-csv">Xuất danh sách (CSV)</button>
           <button type="button" class="btn sm danger" id="dv-don" ${coAnh.length ? '' : 'disabled'}>Dọn tệp minh chứng (giải phóng dung lượng)</button></div>
+        <p class="muted small">“Tải tất cả” tạo một file nén chứa các file <b>&lt;Tên người&gt;.zip</b> – mỗi người một file. Muốn tải riêng một người, bấm ⬇️ trên thẻ của người đó.</p>
         <p class="muted small">“Dọn tệp” xóa ảnh và tệp minh chứng khỏi máy chủ nhưng vẫn giữ kết quả ai đã nộp, nộp lúc nào. Chỉ nên dọn khi không cần xem lại nữa (vd: hết năm).</p></div>
     </div>
     <div class="head-row"><h3 style="margin:0">Đã nộp (${daNop.length})</h3>${coAnh.length ? '<span class="muted small">Bấm vào ảnh để xem lớn (nút ‹ › hoặc phím ← → để xem lần lượt từng người); bấm vào tệp PDF, Word… để mở hoặc tải về.</span>' : ''}</div>
     ${daNop.length ? `<div class="mc-luoi">${daNop.map((x, i) => `<div class="mc-the ${treHan(d, x.n) ? 'tre' : ''}">
-        <div class="mc-the-dau"><b>${i + 1}. ${esc(x.u.ho_ten || x.u.email)}</b>${treHan(d, x.n) ? ' <span class="nang">Trễ</span>' : ''}
+        <div class="mc-the-dau">${!x.n.anh_da_xoa && x.n.anh.length ? `<button type="button" class="btn sm mc-tai" data-tai-nguoi="${esc(x.u.id)}" title="Tải minh chứng của người này (.zip)">⬇️</button>` : ''}<b>${i + 1}. ${esc(x.u.ho_ten || x.u.email)}</b>${treHan(d, x.n) ? ' <span class="nang">Trễ</span>' : ''}
           <div class="muted small">${CHUC_VU[x.u.chuc_vu] || ''} · nộp ${fmtGio(x.n.nop_luc)}${x.n.sua_luc ? ` · sửa ${fmtGio(x.n.sua_luc)}` : ''}</div></div>
         ${x.n.anh_da_xoa ? '<p class="muted small">Minh chứng đã được dọn.</p>' : oAnhNho(x.n.anh, `${x.u.ho_ten || x.u.email} – ${d.ten}`, true)}
         ${x.n.ghi_chu ? `<div class="small mc-gc">${esc(x.n.ghi_chu)}</div>` : ''}</div>`).join('')}</div>` : '<p class="muted">Chưa có ai nộp.</p>'}`;
@@ -417,7 +500,10 @@ async function dvChiTietDot(than, conSong, dotId) {
   S.dvClick = async e => {
     const id = e.target.closest('button')?.id;
     if (e.target.closest('#dv-ve')) { S.dvDot = null; dieuHuong(); return; }
-    if (id === 'dv-sua') moSuaDot(d, dsGiao, lamMoi);
+    const tn = e.target.closest('[data-tai-nguoi]');
+    if (tn) { taiMinhChung(d, coAnh.filter(x => x.u.id === tn.dataset.taiNguoi), tn); return; }
+    if (id === 'dv-tai') taiMinhChung(d, coAnh, e.target.closest('button'));
+    else if (id === 'dv-sua') moSuaDot(d, dsGiao, lamMoi);
     else if (id === 'dv-nhan') moSuaDot(d, dsGiao, nid => { S.dvDot = nid; dieuHuong(); }, true);
     else if (id === 'dv-dong') {
       const dangMo = d.dang_mo;

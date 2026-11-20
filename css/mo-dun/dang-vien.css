@@ -58,3 +58,5 @@ a.btn { text-decoration: none; }
 .mc-thumb-tep { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; text-align: center; background: #fff; }
 .mc-thumb-tep small { font-size: 11px; line-height: 1.25; word-break: break-all; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .dv-da-nop .mc-tep-ds { width: auto; flex: 1 1 260px; }
+/* Nút tải minh chứng của từng người */
+.mc-the-dau .mc-tai { float: right; margin-left: 8px; padding: 3px 8px; }

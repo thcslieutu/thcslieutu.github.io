@@ -8,7 +8,7 @@
    Nhóm để giao báo cáo: tất cả, theo chức vụ, GV chủ nhiệm, và các quyền "thành viên" (vd: Là đảng viên).
    ===================================================================== */
 
-const TT_NOP = { da_nop: 'Chờ xem', dat: 'Đạt', can_sua: 'Cần sửa' };
+const TT_NOP = { da_nop: 'Chờ xem', dat: 'Đạt', can_sua: 'Cần sửa' };   // "Đạt" = đã duyệt: người nộp không sửa được nữa
 const badgeNop = n => !n ? '' : `<span class="tt tt-bc-${n.trang_thai}">${n.trang_thai === 'da_nop' ? 'Đã nộp – chờ xem' : TT_NOP[n.trang_thai]}</span>`;
 const quanLyMoiDot = () => App.coQuyen('bc.xem_tat_ca');
 const taoDuocDot = () => App.coQuyen('bc.quan_ly') || App.coQuyen('bc.xem_tat_ca');
@@ -112,7 +112,9 @@ async function bcCuaToi(than, conSong) {
     const tt = n ? badgeNop(n) + (treHan(d, n) ? ' <span class="tt tt-chua_xu_ly">Trễ</span>' : '')
       : !d.dang_mo ? '<span class="tt tt-chua_xu_ly">Không nộp</span>'
       : d.han_chot && new Date(d.han_chot) < Date.now() ? '<span class="tt tt-chua_xu_ly">Quá hạn – chưa nộp</span>' : '<span class="tt tt-dang_xu_ly">Chưa nộp</span>';
-    const nutNop = d.dang_mo || canSua
+    const daDuyet = n?.trang_thai === 'dat';   // đã duyệt "Đạt": khóa, không sửa được nữa
+    const nutNop = daDuyet ? '<span class="small chu-xanh">🔒 Đã được duyệt – không sửa được nữa</span>'
+      : d.dang_mo || canSua
       ? `<button type="button" class="btn ${n && !canSua ? '' : 'primary'}" data-nop="${d.id}">${canSua ? '✏️ Sửa và nộp lại' : n ? '✏️ Sửa bài nộp' : '📤 Nộp báo cáo'}</button>` : '';
     return `<div class="dv-dot ${n ? 'da-nop' : ''} ${canSua ? 'can-sua' : ''}">
       <div class="head-row"><h3>${esc(d.ten)}</h3><span>${tt}</span></div>
@@ -344,7 +346,7 @@ function moNhanXet(n, u, d, xong) {
       <label class="radio"><input type="radio" name="nx-tt" value="can_sua" ${n.trang_thai === 'can_sua' ? 'checked' : ''}> ✎ Cần sửa – yêu cầu nộp lại</label>
       <label class="radio"><input type="radio" name="nx-tt" value="da_nop"> Chưa xem (bỏ nhận xét)</label></div>
     <label class="lbl">Lời nhận xét <span class="muted small">(người nộp sẽ thấy)</span><textarea class="input" id="nx-nd" rows="4" placeholder="vd: Cần bổ sung số liệu tháng 11…">${esc(n.nhan_xet || '')}</textarea></label>
-    <p class="muted small">“Cần sửa”: người nộp được sửa và nộp lại kể cả khi đợt đã đóng; nộp lại xong bài trở về “Chờ xem”.</p>
+    <p class="muted small">“Cần sửa”: người nộp được sửa và nộp lại kể cả khi đợt đã đóng; nộp lại xong bài trở về “Chờ xem”. “Đạt”: bài được duyệt, người nộp không sửa được nữa (muốn cho sửa, chọn lại “Cần sửa” hoặc “Chưa xem”).</p>
     <div class="modal-actions"><span class="sp"></span><button type="button" class="btn" data-dong>Hủy</button><button type="button" class="btn primary" id="nx-luu">Lưu nhận xét</button></div>`);
   $('#nx-luu').onclick = async () => {
     const tt = $('input[name=nx-tt]:checked').value, nd = $('#nx-nd').value.trim();

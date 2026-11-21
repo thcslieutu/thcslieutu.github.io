@@ -20,7 +20,7 @@ window.APP_CONFIG = {
   LOGO: '',
 
   // Thông tin tác giả (hiện ở chân trang trên máy tính). Để trống TAC_GIA: '' thì ẩn chân trang.
-  TAC_GIA: 'Lâm Hòa Văn',
-  TAC_GIA_SDT: '0977.364.202',
-  TAC_GIA_DON_VI: 'Giáo viên Trường THCS Liêu Tú'
+  TAC_GIA: 'Trường THCS Liêu Tú',
+  TAC_GIA_SDT: 'Email: thcslieutu@gmail.com',
+  TAC_GIA_DON_VI: 'Đ/c: ấp Đại Nôn, xã Liêu Tú, TP Cần Thơ'
 };

@@ -26,3 +26,13 @@
   .st-bb-in { break-inside: avoid; }
   .st-cc-so > div { border: 1px solid #ccc; }
 }
+/* Tổng hợp */
+.st-th .dong-tong td { border-top: 2px solid var(--line, #d5d9de); background: var(--bg); }
+.st-th-tieu-de { margin-top: 18px; }
+.st-th-nd { border-top: 1px solid var(--line, #e3e6ea); padding-top: 6px; margin-top: 8px; }
+.st-th-nd h3 { margin: 4px 0; font-size: 15px; }
+.st-th-nd p { margin: 6px 0 2px; }
+.st-th-nd ul { margin: 0 0 4px; padding-left: 20px; }
+.st-th-nd li { white-space: pre-wrap; }
+.st-xoa { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--line, #e3e6ea); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+@media print { .st-th-nd { break-inside: avoid; } .st-th { font-size: 10.5px; } .st-th th, .st-th td { padding: 3px 4px; } }

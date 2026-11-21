@@ -64,6 +64,7 @@ async function veSoTruc(el, trang) {
     else if (trang === 'cua_toi') await stCuaToi(than, conSong);
     else if (trang === 'lich') await stLich(than, conSong);
     else if (trang === 'so') await (S.stIn ? stInSo(than, conSong) : stSo(than, conSong));
+    else if (trang === 'tong_hop') await stTongHop(than, conSong);
     else if (trang === 'mau') await stMau(than, conSong);
   } catch (e) {
     if (conSong()) than.innerHTML = `<section class="card"><p class="err pad">${esc(loiChuaCaiST(e) ? MSG_CHUA_CAI_ST : dichLoi(e))}</p></section>`;
@@ -201,6 +202,8 @@ async function stBienBan(than, conSong, mo) {
       : r?.y_kien ? `<div class="bc-nhan-xet">${esc(r.y_kien)} <span class="muted small">(${esc(tenND(r.nguoi_y_kien))}, ${fmtGio(r.y_kien_luc)})</span></div>`
       : '<p class="muted small">Chưa có ý kiến.</p>'}
     ${!xemSo() && r?.da_xem ? `<p class="small chu-xanh">✔ Ban giám hiệu đã xem (${esc(tenND(r.nguoi_xem))}, ${fmtGio(r.xem_luc)}).</p>` : ''}
+    ${r && App.laQuanTri() ? `<div class="st-xoa khong-chup"><button type="button" class="btn sm danger" id="st-xoa">🗑 Xóa biên bản này</button>
+      <span class="muted small">Chỉ Quản trị. Xóa hẳn nội dung, số liệu đã chốt và ý kiến chỉ đạo; lịch trực vẫn giữ (buổi này sẽ thành “Chưa ghi sổ”).</span></div>` : ''}
   </section>`;
 
   const noiDung = () => mucs.map((m, i) => ({ muc_id: m.muc_id ?? null, ten: m.ten, nd: ($(`[data-muc="${i}"]`)?.value ?? m.nd ?? '').trim() }));
@@ -229,6 +232,11 @@ async function stBienBan(than, conSong, mo) {
     else if (id === 'st-da-xem') capNhat({ da_xem: !r.da_xem, y_kien: $('#st-y-kien').value.trim() || null }, r.da_xem ? 'Đã bỏ xác nhận.' : 'Đã xác nhận đã xem.');
     else if (id === 'st-mo-khoa') {
       if (confirm('Mở khóa để giáo viên trực sửa lại biên bản? Giáo viên trực sẽ phải chốt sổ lại.')) capNhat({ da_chot: false }, 'Đã mở khóa biên bản.');
+    } else if (id === 'st-xoa') {
+      if (!confirm(`XÓA biên bản trực buổi ${BUOI_TEN[buoi].toLowerCase()} ${vn(ngay)} – ${tenDiemTruc(dt)}?\n\nKhông khôi phục được.`)) return;
+      const { data, error } = await sb.from('st_bien_ban').delete().eq('id', r.id).select('id');
+      if (error || !data?.length) { toast(error ? dichLoi(error) : 'Không đủ quyền xóa.', 'err'); return; }
+      toast('Đã xóa biên bản.'); App.capNhatHuyHieu(); S.stMo = null; dieuHuong();
     }
   };
 }
@@ -351,6 +359,124 @@ async function stInSo(than, conSong) {
   S.stClick = e => {
     if (e.target.closest('#st-ve-so')) { S.stIn = false; dieuHuong(); }
     else if (e.target.closest('#st-in-ngay')) inTrang();
+  };
+}
+
+/* =====================================================================
+   TỔNG HỢP SỔ TRỰC (Ban giám hiệu): gộp theo buổi / ngày / tuần / tháng / học kỳ / điểm trường;
+   xuất CSV (mở bằng Excel), in / lưu PDF
+   ===================================================================== */
+const GOM_ST = { buoi: 'Buổi', ngay: 'Ngày', tuan: 'Tuần', thang: 'Tháng', hoc_ky: 'Học kỳ', diem: 'Điểm trường' };
+const KY_ST = { tuan: 'Tuần này', tuan_truoc: 'Tuần trước', thang: 'Tháng này', thang_truoc: 'Tháng trước', hk1: 'Học kỳ I', hk2: 'Học kỳ II', nam: 'Năm học', tuy: 'Tùy chọn…' };
+function hocKyCua(ymd) {
+  const [y, m] = ymd.split('-').map(Number), nh = m >= 8 ? y : y - 1;
+  const ii = ymd >= `${nh + 1}-${App.cauHinh('chung.hk2_bat_dau', '01-16')}`;
+  return { k: `${nh}-${ii ? 2 : 1}`, ten: `Học kỳ ${ii ? 'II' : 'I'} (${nh}–${nh + 1})` };
+}
+const thuTuBuoiST = x => x.ngay + (x.buoi === 'sang' ? 'a' : 'b') + String(dsDiemTruc().findIndex(d => d.id === x.dt) + 10);
+/** Khóa và tên nhóm của một buổi trực */
+function nhomST(x, gom, tach) {
+  let k, ten;
+  switch (gom) {
+    case 'buoi': k = thuTuBuoiST(x); ten = `${BUOI_TEN[x.buoi]} ${thuNgayST(x.ngay)}`; break;
+    case 'ngay': k = x.ngay; ten = thuNgayST(x.ngay); break;
+    case 'tuan': k = dauTuan(x.ngay); ten = `Tuần ${vn(k)} – ${vn(congNgay(k, 6))}`; break;
+    case 'thang': k = x.ngay.slice(0, 7); ten = `Tháng ${k.slice(5)}/${k.slice(0, 4)}`; break;
+    case 'hoc_ky': ({ k, ten } = hocKyCua(x.ngay)); break;
+    default: k = String(dsDiemTruc().findIndex(d => d.id === x.dt) + 10); ten = tenDiemTruc(x.dt);
+  }
+  if (tach && gom !== 'diem' && gom !== 'buoi') { k += '|' + (dsDiemTruc().findIndex(d => d.id === x.dt) + 10); ten += ' – ' + tenDiemTruc(x.dt); }
+  return { k, ten };
+}
+const ttBuoiST = x => !x.bb ? 'Chưa ghi sổ' : x.bb.da_chot ? 'Đã chốt' : 'Chưa chốt';
+const tyLeST = (cm, ss) => ss ? Math.round(cm / ss * 1000) / 10 : null;
+
+async function stTongHop(than, conSong) {
+  const F = S.locSTTH || (S.locSTTH = { ky: 'thang', tu: dauTuan(homNay()), den: homNay(), dt: '', gom: 'ngay', tach: false, nd: false });
+  const K = F.ky === 'tuy' ? khoangTK('tuy', F.tu, F.den) : khoangTK(F.ky);
+  const ok = K.tu && K.den && K.tu <= K.den;
+  const ds = ok ? (await laySo({ tu: K.tu, den: K.den, dt: F.dt })).filter(x => buoiDaBatDau(x.ngay, x.buoi)).sort((a, c) => thuTuBuoiST(a).localeCompare(thuTuBuoiST(c))) : [];
+  if (!conSong()) return;
+  // Gộp nhóm
+  const nhom = new Map();
+  for (const x of ds) {
+    const { k, ten } = nhomST(x, F.gom, F.tach);
+    if (!nhom.has(k)) nhom.set(k, { k, ten, ds: [] });
+    nhom.get(k).ds.push(x);
+  }
+  const cong = arr => {
+    const chot = arr.filter(x => x.bb?.da_chot), c = { buoi: arr.length, chot: chot.length, chua_chot: arr.filter(x => x.bb && !x.bb.da_chot).length, chua_ghi: arr.filter(x => !x.bb).length,
+      ss: 0, cm: 0, cp: 0, kp: 0, ct: 0, yk: arr.filter(x => x.bb?.y_kien).length, xem: chot.filter(x => x.bb.da_xem).length, coSo: 0 };
+    chot.forEach(x => { const cc = x.bb.chuyen_can; if (!cc) return; c.coSo++; c.ss += +cc.si_so || 0; c.cm += +cc.co_mat || 0; c.cp += +cc.cp || 0; c.kp += +cc.kp || 0; c.ct += +cc.ct || 0; });
+    return c;
+  };
+  const dsNhom = [...nhom.values()].sort((a, c) => a.k.localeCompare(c.k)).map(n => ({ ...n, c: cong(n.ds) }));
+  const tong = cong(ds), laBuoi = F.gom === 'buoi';
+  const cotDau = laBuoi ? ['Buổi', 'Điểm trường', 'Giáo viên trực', 'Sổ'] : [GOM_ST[F.gom], 'Số buổi trực', 'Đã chốt', 'Chưa chốt', 'Chưa ghi sổ'];
+  const cotSo = ['Sĩ số TB/buổi', 'Có mặt (lượt)', 'Vắng có phép', 'Vắng không phép', 'Cúp tiết', 'Tỷ lệ chuyên cần (%)', 'Có ý kiến BGH', 'BGH đã xem'];
+  const giaTri = (n, c) => [...(laBuoi ? [n.ten, tenDiemTruc(n.ds[0].dt), tenND(n.ds[0].gv || n.ds[0].bb?.nguoi_truc) || '', ttBuoiST(n.ds[0])] : [n.ten, c.buoi, c.chot, c.chua_chot, c.chua_ghi]),
+    c.coSo ? Math.round(c.ss / c.coSo * 10) / 10 : '', c.coSo ? c.cm : '', c.coSo ? c.cp : '', c.coSo ? c.kp : '', c.coSo ? c.ct : '', c.coSo ? tyLeST(c.cm, c.ss) : '', c.yk, c.xem];
+  const tenKy = ok ? `${F.ky === 'tuy' ? '' : KY_ST[F.ky] + ': '}${vn(K.tu)} – ${vn(K.den)}` : '';
+  const tenDiemLoc = F.dt === '' ? (S.stDiem.length > 1 ? 'Tất cả điểm trường' : '') : tenDiemTruc(F.dt === 'null' ? null : +F.dt);
+  // Gộp nội dung biên bản theo mục
+  const htmlNoiDung = n => {
+    const muc = new Map();
+    n.ds.filter(x => x.bb).forEach(x => (x.bb.noi_dung || []).filter(m => m.nd).forEach(m => {
+      if (!muc.has(m.ten)) muc.set(m.ten, []);
+      muc.get(m.ten).push(`<li><span class="muted">${laBuoi ? '' : `${BUOI_TEN[x.buoi]} ${vn(x.ngay)}${S.stDiem.length > 1 && !F.tach && F.gom !== 'diem' ? ', ' + esc(tenDiemTruc(x.dt)) : ''}: `}</span>${esc(m.nd)}</li>`);
+    }));
+    const yk = n.ds.filter(x => x.bb?.y_kien).map(x => `<li><span class="muted">${laBuoi ? '' : `${BUOI_TEN[x.buoi]} ${vn(x.ngay)}: `}</span>${esc(x.bb.y_kien)}</li>`);
+    return `<div class="st-th-nd"><h3>${esc(n.ten)}${laBuoi ? ' – ' + esc(tenDiemTruc(n.ds[0].dt)) : ''}</h3>
+      ${[...muc].map(([t, li]) => `<p><b>${esc(t)}:</b></p><ul>${li.join('')}</ul>`).join('') || '<p class="muted small">Không có nội dung ghi chép.</p>'}
+      ${yk.length ? `<p><b>Ý kiến chỉ đạo của BGH:</b></p><ul>${yk.join('')}</ul>` : ''}</div>`;
+  };
+  than.innerHTML = `<section class="card"><div class="head-row"><h2 style="margin:0">Tổng hợp sổ trực</h2>
+      <div class="row-gap wrap khong-chup"><button type="button" class="btn" id="th-csv">⬇ Xuất bảng (CSV)</button><button type="button" class="btn" id="th-csv-ct">⬇ Chi tiết từng biên bản (CSV)</button>
+        <button type="button" class="btn primary" id="th-in">🖨️ In / PDF</button></div></div>
+    <div class="filters khong-chup">
+      <label>Kỳ<select class="input" id="th-ky">${Object.entries(KY_ST).map(([k, t]) => `<option value="${k}" ${F.ky === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${F.ky === 'tuy' ? `<label>Từ ngày<input type="date" class="input" id="th-tu" value="${F.tu}"></label><label>Đến ngày<input type="date" class="input" id="th-den" value="${F.den}"></label>` : ''}
+      <label>Tổng hợp theo<select class="input" id="th-gom">${Object.entries(GOM_ST).map(([k, t]) => `<option value="${k}" ${F.gom === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${S.stDiem.length > 1 ? `<label>Điểm trường<select class="input" id="th-dt"><option value="">Tất cả</option>${dsDiemTruc().map(d => `<option value="${d.id}" ${String(F.dt) === String(d.id) ? 'selected' : ''}>${esc(d.ten)}</option>`).join('')}</select></label>
+        ${F.gom !== 'diem' && F.gom !== 'buoi' && F.dt === '' ? `<label class="switch"><input type="checkbox" id="th-tach" ${F.tach ? 'checked' : ''}> Tách từng điểm</label>` : ''}` : ''}
+      <label class="switch"><input type="checkbox" id="th-nd" ${F.nd ? 'checked' : ''}> Kèm nội dung biên bản</label>
+    </div>
+    <p class="small"><b>${esc(tenKy)}</b>${tenDiemLoc ? ' · ' + esc(tenDiemLoc) : ''} · tổng hợp theo <b>${GOM_ST[F.gom].toLowerCase()}</b></p>
+    ${!ok ? '<p class="err">Chọn khoảng ngày hợp lệ.</p>' : `
+    <div class="table-wrap"><table class="tbl st-th"><thead><tr>${[...cotDau, ...cotSo].map((t, i) => `<th class="${i >= cotDau.length || (!laBuoi && i) ? 'r' : ''}">${t}</th>`).join('')}</tr></thead><tbody>
+      ${dsNhom.map(n => `<tr>${giaTri(n, n.c).map((v, i) => `<td class="${i >= cotDau.length || (!laBuoi && i) ? 'r' : ''} ${i === 0 ? 'nowrap' : ''}">${typeof v === 'number' ? so(v) : esc(v)}</td>`).join('')}</tr>`).join('')
+        || `<tr><td colspan="${cotDau.length + cotSo.length}" class="muted">Không có buổi trực nào trong kỳ này.</td></tr>`}</tbody>
+      ${dsNhom.length > 1 ? `<tfoot><tr class="dong-tong">${giaTri({ ten: 'Tổng cộng', ds: [{}] }, tong).map((v, i) => `<td class="${i >= cotDau.length || (!laBuoi && i) ? 'r' : ''}"><b>${laBuoi && i > 0 && i < cotDau.length ? '' : typeof v === 'number' ? so(v) : esc(v)}</b></td>`).join('')}</tr></tfoot>` : ''}</table></div>
+    <p class="muted small">Chỉ tính các buổi đã đến giờ trực. Số liệu chuyên cần lấy từ các biên bản <b>đã chốt</b> (chốt lúc nào thì số liệu lúc đó).
+      ${laBuoi ? '' : 'Sĩ số TB/buổi = tổng sĩ số các buổi đã chốt ÷ số buổi đã chốt; tỷ lệ chuyên cần = có mặt ÷ sĩ số.'}</p>
+    ${F.nd ? `<h2 class="st-th-tieu-de">Nội dung biên bản</h2>${dsNhom.map(htmlNoiDung).join('') || '<p class="muted">Không có.</p>'}` : ''}`}
+  </section>`;
+
+  const tenFile = `So-truc_${GOM_ST[F.gom].replace(/\s+/g, '-')}_${ok ? K.tu + '_' + K.den : ''}.csv`;
+  S.stChange = e => {
+    const id = e.target.id;
+    if (!['th-ky', 'th-tu', 'th-den', 'th-gom', 'th-dt', 'th-tach', 'th-nd'].includes(id)) return;
+    F.ky = $('#th-ky').value; F.gom = $('#th-gom').value; F.dt = $('#th-dt')?.value ?? ''; F.tach = !!$('#th-tach')?.checked; F.nd = $('#th-nd').checked;
+    if ($('#th-tu')) { F.tu = $('#th-tu').value || F.tu; F.den = $('#th-den').value || F.den; }
+    stTongHop(than, conSong);
+  };
+  S.stClick = e => {
+    const id = e.target.closest('button')?.id;
+    if (id === 'th-in') inTrang();
+    else if (id === 'th-csv') {
+      if (!dsNhom.length) { toast('Không có dữ liệu.', 'err'); return; }
+      xuatCSV(tenFile, [...cotDau, ...cotSo], [...dsNhom.map(n => giaTri(n, n.c)), ...(dsNhom.length > 1 ? [giaTri({ ten: 'Tổng cộng', ds: [{}] }, tong).map((v, i) => laBuoi && i > 0 && i < cotDau.length ? '' : v)] : [])]);
+    } else if (id === 'th-csv-ct') {
+      if (!ds.length) { toast('Không có dữ liệu.', 'err'); return; }
+      const tenMuc = [...new Set(ds.flatMap(x => (x.bb?.noi_dung || []).map(m => m.ten)))];
+      xuatCSV('Chi-tiet-' + tenFile, ['Ngày', 'Thứ', 'Buổi', 'Điểm trường', 'Giáo viên trực', 'Sổ', 'Chốt lúc', 'Sĩ số', 'Có mặt', 'Vắng có phép', 'Vắng không phép', 'Cúp tiết', 'Tỷ lệ CC (%)', 'Lớp nghỉ', 'Học sinh vắng', ...tenMuc, 'Ý kiến chỉ đạo BGH', 'Người cho ý kiến', 'BGH đã xem'],
+        ds.map(x => { const b = x.bb, cc = b?.da_chot ? b.chuyen_can : null;
+          return [vn(x.ngay), thuNgayST(x.ngay).split(',')[0], BUOI_TEN[x.buoi], tenDiemTruc(x.dt), tenND(x.gv || b?.nguoi_truc) || '', ttBuoiST(x), b?.chot_luc ? fmtTG(b.chot_luc) : '',
+            cc ? cc.si_so : '', cc ? cc.co_mat : '', cc ? cc.cp : '', cc ? cc.kp : '', cc ? cc.ct : '', cc ? tyLeST(cc.co_mat, cc.si_so) ?? '' : '', cc ? (cc.lop_nghi || []).join(', ') : '',
+            cc ? (cc.hoc_sinh || []).map(h => `${h.ten} (${h.lop}, ${h.loai === 'co_phep' ? 'P' : h.loai === 'khong_phep' ? 'KP' : 'cúp tiết'})`).join('; ') : '',
+            ...tenMuc.map(t => (b?.noi_dung || []).find(m => m.ten === t)?.nd || ''), b?.y_kien || '', b?.nguoi_y_kien ? tenND(b.nguoi_y_kien) : '', b?.da_xem ? 'Đã xem' : ''];
+        }));
+    }
   };
 }
 

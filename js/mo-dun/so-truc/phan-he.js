@@ -23,5 +23,8 @@ App.dangKyTrang({ id: 'st-lich', phanHe: 'so_truc', ten: 'Lịch trực', icon: 
 App.dangKyTrang({ id: 'st-so', phanHe: 'so_truc', ten: 'Sổ trực', icon: 'xuly', thuTu: 3,
   quyen: ['st.xem'], ve: el => veSoTruc(el, 'so'), huyHieu: demChuaXem });
 
-App.dangKyTrang({ id: 'st-mau', phanHe: 'so_truc', ten: 'Mẫu biên bản', icon: 'loai', thuTu: 4,
+App.dangKyTrang({ id: 'st-tong-hop', phanHe: 'so_truc', ten: 'Tổng hợp', icon: 'thongke', thuTu: 4,
+  quyen: ['st.xem'], ve: el => veSoTruc(el, 'tong_hop') });
+
+App.dangKyTrang({ id: 'st-mau', phanHe: 'so_truc', ten: 'Mẫu biên bản', icon: 'loai', thuTu: 5,
   quyen: () => App.laQuanTri(), ve: el => veSoTruc(el, 'mau') });

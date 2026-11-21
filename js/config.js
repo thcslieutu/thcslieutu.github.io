@@ -8,8 +8,8 @@
 //  Quản trị sửa ngay trong phần mềm: phân hệ Quản trị → Cấu hình.
 // =============================================================
 window.APP_CONFIG = {
-  SUPABASE_URL: 'https://etbajyyevkafprnktpje.supabase.co',
-  SUPABASE_ANON_KEY: 'sb_publishable_gGPvuf4D3O029aWNim1obw_1biFNEjI',
+  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+  SUPABASE_ANON_KEY: 'YOUR-ANON-KEY',
 
   TEN_TRUONG: 'Trường THCS Liêu Tú',
   TEN_UNG_DUNG: 'Ứng dụng quản lý nhà trường',

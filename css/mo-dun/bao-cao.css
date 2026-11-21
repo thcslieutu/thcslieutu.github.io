@@ -1,4 +1,4 @@
-/* PHÂN HỆ ĐẢNG VIÊN – khảo sát, ảnh minh chứng */
+/* PHÂN HỆ BÁO CÁO – đợt báo cáo, tệp minh chứng, nhận xét */
 /* ---------- Đảng viên – khảo sát ---------- */
 .dv-dot { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 12px 0; background: #fff; }
 .dv-dot.da-nop { border-color: #bfe3cc; background: #fbfefc; }
@@ -60,3 +60,23 @@ a.btn { text-decoration: none; }
 .dv-da-nop .mc-tep-ds { width: auto; flex: 1 1 260px; }
 /* Nút tải minh chứng của từng người */
 .mc-the-dau .mc-tai { float: right; margin-left: 8px; padding: 3px 8px; }
+
+/* Trạng thái bài nộp, nhận xét */
+.tt-bc-da_nop { background: var(--pri-2); color: var(--pri); }
+.tt-bc-dat { background: var(--ok-bg); color: var(--ok); }
+.tt-bc-can_sua { background: var(--warn-bg); color: var(--warn); }
+.chu-xanh { color: var(--ok); }
+.bc-nhan-xet { background: var(--ok-bg); border-left: 3px solid var(--ok); border-radius: 8px; padding: 8px 10px; margin: 8px 0; white-space: pre-line; }
+.bc-nhan-xet.can-sua { background: var(--warn-bg); border-left-color: var(--warn); }
+.dv-dot.can-sua { border-color: #f0d6b0; box-shadow: inset 4px 0 0 var(--warn); }
+.bc-nhom-tieu-de { margin: 6px 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.bc-chon-rieng { margin-top: 8px; }
+.bc-chon-rieng summary { cursor: pointer; }
+.bc-chon-rieng .input { margin: 6px 0; max-width: 280px; }
+.bc-chon-rieng .ds-chon { max-height: 220px; overflow: auto; }
+.bc-xem-truoc { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.bc-nut-duyet { margin-top: auto; }
+.mc-the-dau .tt { margin-top: 4px; }
+.bc-nhom, .bc-chon-rieng .ds-chon { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.bc-nhom .radio, .bc-chon-rieng .radio { align-items: baseline; }
+.bc-nhom .radio .muted, .bc-chon-rieng .radio .muted { white-space: nowrap; }

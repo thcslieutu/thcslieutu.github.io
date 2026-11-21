@@ -6,11 +6,11 @@
    ===================================================================== */
 
 /** Tên phân hệ của một quyền (theo App.phanHe; phân hệ chưa có giao diện thì dùng mã) */
-const tenPhanHeQuyen = ma => App.phanHe.find(p => p.id === ma)?.ten || { quan_tri: 'Quản trị' }[ma] || ma;
+const tenPhanHeQuyen = ma => App.phanHe.find(p => p.id === ma)?.ten || { quan_tri: 'Quản trị', nhom: 'Nhóm' }[ma] || ma;
 /** Danh mục quyền nhóm theo phân hệ: [[phanHe, [quyền…]], …] */
 function nhomQuyen() {
   const m = new Map();
-  const thuTu = ma => App.phanHe.find(p => p.id === ma)?.thuTu ?? (ma === 'quan_tri' ? 1000 : 500);
+  const thuTu = ma => App.phanHe.find(p => p.id === ma)?.thuTu ?? (ma === 'quan_tri' ? 1000 : ma === 'nhom' ? 900 : 500);
   [...S.dsQuyen].sort((a, b) => thuTu(a.phan_he) - thuTu(b.phan_he) || a.thu_tu - b.thu_tu).forEach(q => {
     if (!m.has(q.phan_he)) m.set(q.phan_he, []);
     m.get(q.phan_he).push(q);

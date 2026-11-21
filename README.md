@@ -23,14 +23,14 @@ js/nen-tang/                    NỀN TẢNG
   ung-dung.js                     đăng nhập, phân quyền, dữ liệu chung, menu, chọn phân hệ
 js/mo-dun/vi-pham/              PHÂN HỆ VI PHẠM
 js/mo-dun/chuyen-can/           PHÂN HỆ CHUYÊN CẦN
-js/mo-dun/dang-vien/            PHÂN HỆ ĐẢNG VIÊN
+js/mo-dun/bao-cao/              PHÂN HỆ BÁO CÁO
 js/mo-dun/quan-tri/             PHÂN HỆ QUẢN TRỊ (học sinh, tài khoản, cấu hình, dữ liệu)
 js/khoi-dong.js                 Khởi động (luôn nạp cuối cùng)
 css/nen-tang.css, css/mo-dun/   Giao diện
 supabase/00-nen-tang.sql        Cơ sở dữ liệu nền tảng (chạy đầu tiên)
 supabase/10-vi-pham.sql         … phân hệ Vi phạm
 supabase/20-chuyen-can.sql      … phân hệ Chuyên cần (cần Vi phạm)
-supabase/30-dang-vien.sql       … phân hệ Đảng viên
+supabase/30-bao-cao.sql         … phân hệ Báo cáo
 ```
 
 ## Các phân hệ
@@ -41,7 +41,7 @@ Sau khi đăng nhập, người dùng chọn **phân hệ**; menu chỉ hiện c
 |---|---|---|
 | **Vi phạm** | Nhập vi phạm, Xử lý, Thống kê, Danh mục | Ghi vi phạm cho học sinh hoặc cả lớp, chọn ngày giờ. Chống ghi trùng trong buổi. Xử lý theo quyền, có thể xử lý hàng loạt. Thống kê có so sánh kỳ trước, theo lớp / học sinh / loại / điểm trường. Danh mục gồm hình thức vi phạm và biện pháp xử lý. |
 | **Chuyên cần** | Ghi nhận vắng, Báo cáo chuyên cần | Ghi học sinh vắng có phép, không phép, cúp tiết (mỗi buổi một lần). Báo cáo theo buổi hoặc theo khoảng thời gian. Đánh dấu lớp nghỉ. |
-| **Đảng viên** | Khảo sát của tôi, Quản lý đợt, Tổng hợp | Đảng viên nộp 1–3 ảnh minh chứng cho mỗi đợt khảo sát. Người quản lý xem ai chưa nộp, sao chép danh sách gửi Zalo, xem ảnh ngay trên phần mềm, xuất CSV, dọn ảnh. |
+| **Báo cáo** | Báo cáo của tôi, Quản lý đợt, Tổng hợp | Người có quyền tạo đợt báo cáo, giao cho **nhóm** (tất cả CB-GV-NV, theo chức vụ, GV chủ nhiệm, Đảng viên…) và/hoặc **từng người**. Mỗi người nộp 1–3 tệp: ảnh (tự nén) hoặc PDF, Word, Excel, PowerPoint (tối đa 5 MB/tệp). Người tạo xem ai chưa nộp, sao chép danh sách gửi Zalo, xem ảnh và mở tệp ngay trên phần mềm, **nhận xét Đạt / Cần sửa** (người nộp sửa và nộp lại, kể cả khi đợt đã đóng), tải tất cả minh chứng (mỗi người một file .zip mang tên người đó), xuất CSV, dọn tệp. Tổng hợp tỷ lệ hoàn thành theo từng người, lọc theo nhóm. |
 | **Quản trị** | Học sinh, Tài khoản, Cấu hình, Dữ liệu | Quản lý điểm trường – lớp – học sinh (nhập từ Excel). Duyệt tài khoản và phân quyền. Sửa thông số. Sao lưu CSV, xóa dữ liệu. |
 
 ## Chức vụ và quyền
@@ -61,18 +61,20 @@ Mỗi tài khoản có một **chức vụ** (Giáo viên, Tổng phụ trách, 
 | Sửa hình thức vi phạm | Vi phạm | BGH |
 | Sửa biện pháp xử lý | Vi phạm | (chỉ Quản trị) |
 | Dùng phân hệ Chuyên cần | Chuyên cần | GV, TPT, BGH |
-| Là đảng viên | Đảng viên | tick riêng |
-| Quản lý khảo sát | Đảng viên | (chỉ Quản trị) |
+| Tạo đợt báo cáo (xem, nhận xét đợt mình tạo) | Báo cáo | BGH |
+| Quản lý mọi đợt báo cáo | Báo cáo | BGH |
+| Là đảng viên (nhóm để giao báo cáo) | Nhóm | tick riêng |
 | Quản lý học sinh | Quản trị | BGH |
 
-Mọi quyền được kiểm tra **trên máy chủ** (Row Level Security), không chỉ ẩn nút trên giao diện. Nhân viên chỉ có quyền Đảng viên thì không xem được dữ liệu học sinh.
+Mọi quyền được kiểm tra **trên máy chủ** (Row Level Security), không chỉ ẩn nút trên giao diện. Nhân viên (chỉ dùng phân hệ Báo cáo) thì không xem được dữ liệu học sinh.
 
 ## Cài đặt (khoảng 15 phút)
 
 ### Bước 1 – Tạo cơ sở dữ liệu
 1. <https://supabase.com> → **New project** (gói Free, Region: Singapore).
 2. **SQL Editor** → **New query** → dán và **Run** lần lượt từng file, **đúng thứ tự**:
-   `00-nen-tang.sql` → `10-vi-pham.sql` → `20-chuyen-can.sql` → `30-dang-vien.sql`.
+   `00-nen-tang.sql` → `10-vi-pham.sql` → `20-chuyen-can.sql` → `30-bao-cao.sql`.
+   (Đã chạy `30-dang-vien.sql` của bản trước: chỉ cần chạy `30-bao-cao.sql`, dữ liệu khảo sát cũ tự chuyển sang thành các đợt báo cáo giao cho nhóm Đảng viên.)
    Mỗi file chạy xong hiện dòng “Đã cài …”. Chạy lại nhiều lần vẫn an toàn. Có lỗi thì file tự hủy, không thay đổi gì.
 3. **Project Settings → API**: chép **Project URL** và khóa **anon public** (hoặc *publishable key*).
 
@@ -106,4 +108,4 @@ Supabase → **Authentication → URL Configuration**:
 - Mỗi vi phạm lưu **lớp và điểm trừ tại thời điểm ghi**. Chuyển lớp hay đổi thang điểm không làm thay đổi số liệu cũ.
 - Xóa lớp / học sinh sẽ xóa kèm dữ liệu liên quan (vi phạm, vắng…). Phần mềm báo trước số lượng và yêu cầu xác nhận. Học sinh nghỉ học nên **Đánh dấu đã nghỉ** thay vì xóa.
 - Supabase gói Free có thể tạm dừng nếu lâu không truy cập (nhất là dịp hè). Vào Dashboard bấm *Restore*. Nên sao lưu CSV định kỳ (Quản trị → Dữ liệu).
-- Ảnh minh chứng: gói Free có 1 GB. Mỗi ảnh sau khi nén khoảng 100–300 KB. Có thể **Dọn ảnh** các đợt cũ.
+- Minh chứng: gói Free có 1 GB lưu trữ. Mỗi ảnh sau khi nén khoảng 100–300 KB; PDF, Word tối đa 5 MB/tệp. Có thể **Dọn tệp minh chứng** các đợt cũ.

@@ -1,0 +1,28 @@
+/* PHÂN HỆ SỔ TRỰC */
+.chu-cam { color: var(--warn); }
+.chu-xanh { color: var(--ok); }
+.st-cc { border: 1px solid var(--line, #e3e6ea); border-radius: 10px; padding: 10px 12px; background: var(--bg); margin-bottom: 8px; }
+.st-cc-so { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.st-cc-so > div { background: #fff; border-radius: 8px; padding: 6px 10px; display: flex; flex-direction: column; }
+.st-cc-so span { font-size: 12.5px; color: var(--muted); }
+.st-cc-so b { font-size: 20px; }
+.st-cc-so small { font-size: 12px; color: var(--muted); }
+.st-cc p { margin: 4px 0; }
+.st-cc-lop { max-width: 520px; }
+.st-nd { white-space: pre-wrap; padding: 6px 10px; background: var(--bg); border-radius: 8px; font-weight: 400; min-height: 1.6em; }
+#st-muc .lbl { display: block; margin-bottom: 10px; font-weight: 600; }
+#st-muc textarea { width: 100%; font-weight: 400; margin-top: 3px; }
+.tbl tr.st-hom-nay td { background: #fff8e6; }
+.tbl td.st-cua-toi { background: #e7f3ff; font-weight: 600; }
+.tbl tr.st-chua-xem td { font-weight: 600; }
+.st-lich select { min-width: 130px; max-width: 180px; }
+.st-lich .nhom-cot { border-left: 2px solid var(--line, #e3e6ea); }
+.st-so-in h2 { margin-bottom: 0; }
+.st-bb-in { border-top: 1.5px solid #333; padding-top: 8px; margin-top: 14px; }
+.st-bb-in h3 { margin: 0 0 4px; font-size: 15.5px; }
+.st-muc-in { margin: 4px 0; white-space: pre-wrap; }
+.st-y-kien-in { margin-top: 8px; padding: 6px 10px; border: 1px dashed #999; border-radius: 6px; white-space: pre-wrap; }
+@media print {
+  .st-bb-in { break-inside: avoid; }
+  .st-cc-so > div { border: 1px solid #ccc; }
+}

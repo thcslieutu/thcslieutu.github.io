@@ -31,7 +31,7 @@ async function veTaiKhoan(el) {
     <details class="small giai-thich"><summary>Ý nghĩa từng quyền</summary>
       ${nhomQuyen().map(([ph, ds]) => `<div class="nhom-ten">${esc(tenPhanHeQuyen(ph))}</div><ul>${ds.map(q => `<li><b>${esc(q.ten)}</b>: ${esc(q.mo_ta || '')}</li>`).join('')}</ul>`).join('')}
     </details>
-    <div class="table-wrap" id="tk-bang"><p class="muted pad">Đang tải…</p></div></section>`;
+    <div class="table-wrap tk-cuon" id="tk-bang"><p class="muted pad">Đang tải…</p></div></section>`;
 
   const nhom = nhomQuyen();
   const ve = () => {
@@ -60,6 +60,9 @@ async function veTaiKhoan(el) {
           <div>${u.email && u.id !== S.user.id ? `<button type="button" class="link" data-dat-lai="${esc(u.email)}" title="Gửi email đặt lại mật khẩu">Đặt lại MK</button>` : ''}
           ${u.id !== S.user.id ? '<button type="button" class="link danger" data-xoa-tk>Xóa</button>' : ''}</div></td></tr>`).join('')
         || `<tr><td colspan="99" class="muted">Không có tài khoản phù hợp.</td></tr>`}</tbody></table>`;
+    // Tiêu đề bảng đứng yên khi cuộn: dòng tiêu đề thứ hai nằm ngay dưới dòng thứ nhất
+    const h1 = Math.floor($('#tk-bang thead tr')?.getBoundingClientRect().height || 0) - 1;
+    $('#tk-bang').style.setProperty('--tk-h1', h1 + 'px');
   };
   const danhDau = tr => tr.querySelector('[data-luu]').classList.add('primary');
   const tickMacDinh = (tr, cv) => {

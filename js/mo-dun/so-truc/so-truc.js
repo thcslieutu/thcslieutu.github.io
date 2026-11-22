@@ -233,12 +233,17 @@ async function stBienBan(than, conSong, mo) {
     else if (id === 'st-mo-khoa') {
       if (confirm('Mở khóa để giáo viên trực sửa lại biên bản? Giáo viên trực sẽ phải chốt sổ lại.')) capNhat({ da_chot: false }, 'Đã mở khóa biên bản.');
     } else if (id === 'st-xoa') {
-      if (!confirm(`XÓA biên bản trực buổi ${BUOI_TEN[buoi].toLowerCase()} ${vn(ngay)} – ${tenDiemTruc(dt)}?\n\nKhông khôi phục được.`)) return;
-      const { data, error } = await sb.from('st_bien_ban').delete().eq('id', r.id).select('id');
-      if (error || !data?.length) { toast(error ? dichLoi(error) : 'Không đủ quyền xóa.', 'err'); return; }
-      toast('Đã xóa biên bản.'); App.capNhatHuyHieu(); S.stMo = null; dieuHuong();
+      xoaBienBan(r.id, `${BUOI_TEN[buoi]} ${vn(ngay)} – ${tenDiemTruc(dt)}`, () => { S.stMo = null; dieuHuong(); });
     }
   };
+}
+
+/** Quản trị xóa một biên bản trực (máy chủ chỉ cho Quản trị xóa) */
+async function xoaBienBan(id, ten, xong) {
+  if (!confirm(`XÓA biên bản trực: ${ten}?\n\nXóa hẳn nội dung, số liệu đã chốt và ý kiến chỉ đạo; không khôi phục được. Lịch trực vẫn giữ.`)) return;
+  const { data, error } = await sb.from('st_bien_ban').delete().eq('id', id).select('id');
+  if (error || !data?.length) { toast(error ? dichLoi(error) : 'Không đủ quyền xóa (chỉ Quản trị).', 'err'); return; }
+  toast('Đã xóa biên bản.'); App.capNhatHuyHieu(); xong();
 }
 
 /* =====================================================================
@@ -328,9 +333,9 @@ async function stSo(than, conSong) {
       `<li>${BUOI_TEN[x.buoi]} ${thuNgayST(x.ngay)} – ${esc(tenDiemTruc(x.dt))}: <b>${esc(tenND(x.gv))}</b> (${x.bb ? 'đang ghi, chưa chốt' : 'chưa ghi sổ'})</li>`).join('')}${canhBao.length > 15 ? `<li>… và ${canhBao.length - 15} buổi khác</li>` : ''}</ul></div>` : ''}
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Ngày</th><th>Buổi</th><th>Điểm trường</th><th>Giáo viên trực</th><th>Sổ</th><th>Có mặt / sĩ số</th><th>Ý kiến BGH</th><th>Đã xem</th><th></th></tr></thead><tbody>
       ${loc.map(x => `<tr class="${x.bb?.da_chot && !x.bb.da_xem ? 'st-chua-xem' : ''}"><td class="nowrap">${thuNgayST(x.ngay)}</td><td>${BUOI_TEN[x.buoi]}</td><td>${esc(tenDiemTruc(x.dt))}</td>
-        <td>${esc(tenND(x.gv) || '–')}</td><td>${tt(x)}</td><td class="small">${tyLe(x.bb?.chuyen_can)}</td>
+        <td>${esc(tenND(x.gv || x.bb?.nguoi_truc) || '–')}${!x.gv && x.bb ? ' <span class="muted small">(không còn trong lịch)</span>' : ''}</td><td>${tt(x)}</td><td class="small">${tyLe(x.bb?.chuyen_can)}</td>
         <td class="small">${x.bb?.y_kien ? esc(x.bb.y_kien.slice(0, 60)) + (x.bb.y_kien.length > 60 ? '…' : '') : ''}</td><td class="c">${x.bb?.da_xem ? '✔' : ''}</td>
-        <td class="r">${x.bb || x.gv ? `<button type="button" class="btn sm" data-mo="${khoaBuoi(x.ngay, x.buoi, x.dt)}">Xem</button>` : ''}</td></tr>`).join('')
+        <td class="r nowrap">${x.bb || x.gv ? `<button type="button" class="btn sm" data-mo="${khoaBuoi(x.ngay, x.buoi, x.dt)}">Xem</button>` : ''}${x.bb && App.laQuanTri() ? ` <button type="button" class="btn sm danger" data-xoa-bb="${x.bb.id}" title="Xóa biên bản (chỉ Quản trị)">🗑 Xóa</button>` : ''}</td></tr>`).join('')
         || '<tr><td colspan="9" class="muted">Không có buổi trực nào trong khoảng này.</td></tr>'}</tbody></table></div></section>`;
   S.stChange = e => {
     if (!['sts-tu', 'sts-den', 'sts-dt', 'sts-tt'].includes(e.target.id)) return;
@@ -339,6 +344,8 @@ async function stSo(than, conSong) {
   };
   S.stClick = e => {
     if (e.target.closest('#st-in')) { S.stIn = true; dieuHuong(); return; }
+    const xb = e.target.closest('[data-xoa-bb]');
+    if (xb) { xoaBienBan(+xb.dataset.xoaBb, xb.closest('tr').cells[0].innerText + ' – ' + xb.closest('tr').cells[1].innerText + ' – ' + xb.closest('tr').cells[2].innerText, () => stSo(than, conSong)); return; }
     const b = e.target.closest('[data-mo]'); if (!b) return;
     const [ngay, buoi, dt] = b.dataset.mo.split('|');
     moBienBan(ngay, buoi, dt ? +dt : null);
